@@ -1,0 +1,109 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile for clients, agents, and admins.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "Firebase Auth UID" },
+        "email": { "type": "string", "format": "email" },
+        "displayName": { "type": "string" },
+        "role": { "type": "string", "enum": ["client", "agent", "supervisor", "branch", "admin"] },
+        "phoneNumber": { "type": "string" },
+        "dateOfBirth": { "type": "string", "format": "date", "description": "User's date of birth (must be 18+)" },
+        "idType": { "type": "string", "enum": ["CIN", "NIF", "Passport"], "description": "Type of identification provided" },
+        "idNumber": { "type": "string", "description": "Identification document number" },
+        "balance": { "type": "number", "description": "Current wallet balance in HTG" },
+        "loyaltyPoints": { "type": "integer" },
+        "branchId": { "type": "string", "description": "Associated branch for agents/supervisors" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "role", "phoneNumber"]
+    },
+    "Draw": {
+      "title": "Draw",
+      "description": "Lottery draw results.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "type": { "type": "string", "enum": ["New York", "Florida", "Georgia", "Lotto 3", "Lotto 4", "Lotto 5"], "description": "The lottery location or game type" },
+        "date": { "type": "string", "format": "date-time" },
+        "numbers": { "type": "array", "items": { "type": "string" } },
+        "jackpot": { "type": "number" },
+        "status": { "type": "string", "enum": ["pending", "completed"] }
+      },
+      "required": ["type", "date", "numbers"]
+    },
+    "Ticket": {
+      "title": "Ticket",
+      "description": "Lottery ticket purchased by a user.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "agentId": { "type": "string", "description": "If purchased at POS" },
+        "drawId": { "type": "string" },
+        "drawType": { "type": "string" },
+        "numbers": { "type": "array", "items": { "type": "string" } },
+        "individualAmounts": { "type": "array", "items": { "type": "number" }, "description": "Specific amount for each number in the ticket" },
+        "amount": { "type": "number" },
+        "status": { "type": "string", "enum": ["active", "won", "lost", "paid"] },
+        "type": { "type": "string", "enum": ["digital", "physical"] },
+        "qrCode": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "drawType", "numbers", "amount", "status", "type"]
+    },
+    "Transaction": {
+      "title": "Transaction",
+      "description": "Payment or payout transaction.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "amount": { "type": "number" },
+        "type": { "type": "string", "enum": ["payment", "payout"] },
+        "method": { "type": "string", "enum": ["MonCash", "NatCash", "Lajan Cash", "Cash"] },
+        "status": { "type": "string", "enum": ["pending", "completed", "failed"] },
+        "reference": { "type": "string", "description": "External payment reference" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "amount", "type", "method", "status"]
+    },
+    "Branch": {
+      "title": "Branch",
+      "description": "Lottery branch or physical location.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "location": { "type": "string" },
+        "managerId": { "type": "string" },
+        "performance": { "type": "object" }
+      },
+      "required": ["name", "location"]
+    },
+    "OTP": {
+      "title": "OTP",
+      "description": "One-time password for transaction verification.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "code": { "type": "string" },
+        "type": { "type": "string", "enum": ["purchase", "payout", "login"] },
+        "status": { "type": "string", "enum": ["pending", "used", "expired"] },
+        "expiresAt": { "type": "string", "format": "date-time" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "code", "type", "status", "expiresAt"]
+    }
+  },
+  "firestore": {
+    "/users/{uid}": { "schema": "User", "description": "User profiles" },
+    "/draws/{drawId}": { "schema": "Draw", "description": "Lottery draws" },
+    "/tickets/{ticketId}": { "schema": "Ticket", "description": "Purchased tickets" },
+    "/transactions/{txId}": { "schema": "Transaction", "description": "Financial transactions" },
+    "/branches/{branchId}": { "schema": "Branch", "description": "Physical branches" },
+    "/otps/{otpId}": { "schema": "OTP", "description": "One-time passwords" }
+  }
+}
