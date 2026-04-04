@@ -66,78 +66,69 @@ export default function Profile({ user }: ProfileProps) {
 
     // Fetch user profile data
     const fetchProfile = async () => {
-      const { data: userData, error } = await supabase
-        .from('users')
-        .select('*')
-        .eq('uid', user.id)
-        .single();
-
-      if (userData) {
-        setUserData(userData);
-        setFullName(userData.displayName || '');
-        setPhoneNumber(userData.phoneNumber || '');
-        setDateOfBirth(userData.dateOfBirth || '');
-        setIdType(userData.idType || 'CIN');
-        setIdNumber(userData.idNumber || '');
-      } else {
-        // Create profile if not exists (e.g. after Google login)
-        const newProfile = {
-          uid: user.id,
-          email: user.email || '',
-          displayName: user.user_metadata?.full_name || 'Joueur',
-          phoneNumber: '',
-          dateOfBirth: '',
-          idType: 'CIN',
-          idNumber: '',
-          role: selectedRole,
-          loyaltyPoints: 0,
-          balance: 0,
-          createdAt: new Date().toISOString()
-        };
-        const { data: createdUser, error: createError } = await supabase
+      try {
+        const { data: userData, error } = await supabase
           .from('users')
-          .insert([newProfile])
-          .select()
+          .select('*')
+          .eq('uid', user.id)
           .single();
-        
-        if (createdUser) {
-          setUserData(createdUser);
-          setFullName(createdUser.displayName);
+
+        if (userData) {
+          setUserData(userData);
+          setFullName(userData.displayName || '');
+          setPhoneNumber(userData.phoneNumber || '');
+          setDateOfBirth(userData.dateOfBirth || '');
+          setIdType(userData.idType || 'CIN');
+          setIdNumber(userData.idNumber || '');
+        } else {
+          // Create profile if not exists (e.g. after Google login)
+          const newProfile = {
+            uid: user.id,
+            email: user.email || '',
+            displayName: user.user_metadata?.full_name || 'Joueur',
+            phoneNumber: '',
+            dateOfBirth: '',
+            idType: 'CIN',
+            idNumber: '',
+            role: selectedRole,
+            loyaltyPoints: 0,
+            balance: 0,
+            createdAt: new Date().toISOString()
+          };
+          const { data: createdUser } = await supabase
+            .from('users')
+            .insert([newProfile])
+            .select()
+            .single();
+          
+          if (createdUser) {
+            setUserData(createdUser);
+            setFullName(createdUser.displayName);
+          }
         }
+      } catch (err) {
+        console.error('Error fetching profile:', err);
       }
     };
     fetchProfile();
 
-    // Fetch ticket history
+    // Fetch ticket history (without Realtime)
     const fetchTickets = async () => {
-      const { data: ticketList, error } = await supabase
-        .from('tickets')
-        .select('*')
-        .eq('userId', user.id)
-        .order('createdAt', { ascending: false });
-      
-      if (ticketList) {
-        setTickets(ticketList);
+      try {
+        const { data: ticketList } = await supabase
+          .from('tickets')
+          .select('*')
+          .eq('userId', user.id)
+          .order('createdAt', { ascending: false });
+        
+        if (ticketList) {
+          setTickets(ticketList);
+        }
+      } catch (err) {
+        console.error('Error fetching tickets:', err);
       }
     };
     fetchTickets();
-
-    // Set up real-time subscription for tickets
-    const channel = supabase
-      .channel('tickets-changes')
-      .on('postgres_changes', { 
-        event: '*', 
-        schema: 'public', 
-        table: 'tickets',
-        filter: `userId=eq.${user.id}`
-      }, (payload) => {
-        fetchTickets();
-      })
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
   }, [user]);
 
   const handleAuth = async (e: React.FormEvent) => {
@@ -146,11 +137,13 @@ export default function Profile({ user }: ProfileProps) {
     setError(null);
 
     if (authMode === 'signup') {
-      const age = differenceInYears(new Date(), new Date(dateOfBirth));
-      if (age < 18) {
-        setError(t('age_error'));
-        setLoading(false);
-        return;
+      if (dateOfBirth) {
+        const age = differenceInYears(new Date(), new Date(dateOfBirth));
+        if (age < 18) {
+          setError(t('age_error') || 'You must be 18 or older');
+          setLoading(false);
+          return;
+        }
       }
     }
 
@@ -191,7 +184,7 @@ export default function Profile({ user }: ProfileProps) {
         }
       }
     } catch (err: any) {
-      setError(err.message);
+      setError(err.message || 'An error occurred');
     } finally {
       setLoading(false);
     }
@@ -246,7 +239,7 @@ export default function Profile({ user }: ProfileProps) {
         if (error) throw error;
         
         setUserData({ ...userData, balance: newBalance });
-        alert(t('top_up_success'));
+        alert(t('top_up_success') || 'Top up successful');
       }
     } catch (error) {
       console.error("Top up error:", error);
@@ -267,7 +260,7 @@ export default function Profile({ user }: ProfileProps) {
 
   const handleSuspendSelf = async () => {
     if (!user) return;
-    if (!window.confirm(t('confirm_suspend_self'))) return;
+    if (!window.confirm(t('confirm_suspend_self') || 'Are you sure?')) return;
     
     setLoading(true);
     try {
@@ -287,11 +280,10 @@ export default function Profile({ user }: ProfileProps) {
 
   const handleDeleteSelf = async () => {
     if (!user) return;
-    if (!window.confirm(t('confirm_delete_self'))) return;
+    if (!window.confirm(t('confirm_delete_self') || 'Are you sure?')) return;
     
     setLoading(true);
     try {
-      // 1. Delete user record in database
       const { error: dbError } = await supabase
         .from('users')
         .delete()
@@ -299,7 +291,6 @@ export default function Profile({ user }: ProfileProps) {
       
       if (dbError) throw dbError;
       
-      // 2. Sign out (Supabase doesn't allow self-deletion via client SDK easily for security reasons, usually handled via Edge Functions or Admin SDK)
       await supabase.auth.signOut();
       alert("Votre compte a été supprimé de notre base de données.");
     } catch (error) {
@@ -353,7 +344,7 @@ export default function Profile({ user }: ProfileProps) {
                   }`}
                 >
                   <r.icon size={14} />
-                  {t(`role_${r.id}`)}
+                  {t(`role_${r.id}`) || r.id}
                 </button>
               ))}
             </div>
@@ -366,7 +357,7 @@ export default function Profile({ user }: ProfileProps) {
                   <UserIcon size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
                   <input 
                     type="text" 
-                    placeholder={t('full_name')}
+                    placeholder={t('full_name') || 'Full Name'}
                     value={fullName}
                     onChange={(e) => setFullName(e.target.value)}
                     className="w-full pl-12 pr-4 py-3 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-primary focus:outline-none font-medium"
@@ -377,7 +368,7 @@ export default function Profile({ user }: ProfileProps) {
                   <Smartphone size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
                   <input 
                     type="tel" 
-                    placeholder={t('phone')}
+                    placeholder={t('phone') || 'Phone'}
                     value={phoneNumber}
                     onChange={(e) => setPhoneNumber(e.target.value)}
                     className="w-full pl-12 pr-4 py-3 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-primary focus:outline-none font-medium"
@@ -392,7 +383,7 @@ export default function Profile({ user }: ProfileProps) {
                     onChange={(e) => setDateOfBirth(e.target.value)}
                     className="w-full pl-12 pr-4 py-3 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-primary focus:outline-none font-medium"
                     required
-                    title={t('dob')}
+                    title={t('dob') || 'Date of Birth'}
                   />
                 </div>
                 <div className="grid grid-cols-2 gap-2">
@@ -404,14 +395,14 @@ export default function Profile({ user }: ProfileProps) {
                       className="w-full pl-12 pr-4 py-3 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-primary focus:outline-none font-medium appearance-none"
                       required
                     >
-                      <option value="CIN">{t('cin')}</option>
-                      <option value="NIF">{t('nif')}</option>
-                      <option value="Passport">{t('passport')}</option>
+                      <option value="CIN">{t('cin') || 'CIN'}</option>
+                      <option value="NIF">{t('nif') || 'NIF'}</option>
+                      <option value="Passport">{t('passport') || 'Passport'}</option>
                     </select>
                   </div>
                   <input 
                     type="text" 
-                    placeholder={t('id_number')}
+                    placeholder={t('id_number') || 'ID Number'}
                     value={idNumber}
                     onChange={(e) => setIdNumber(e.target.value)}
                     className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-primary focus:outline-none font-medium"
@@ -424,19 +415,19 @@ export default function Profile({ user }: ProfileProps) {
               <Mail size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
               <input 
                 type="email" 
-                placeholder={t('email')}
+                placeholder={t('email') || 'Email'}
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className="w-full pl-12 pr-4 py-3 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-primary focus:outline-none font-medium"
                 required
               />
             </div>
-            <p className="text-[10px] text-gray-400 italic ml-1">{t('any_email_hint')}</p>
+            <p className="text-[10px] text-gray-400 italic ml-1">{t('any_email_hint') || 'Any email works'}</p>
             <div className="relative">
               <Lock size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
               <input 
                 type="password" 
-                placeholder={t('password')}
+                placeholder={t('password') || 'Password'}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 className="w-full pl-12 pr-4 py-3 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-primary focus:outline-none font-medium"
@@ -451,7 +442,7 @@ export default function Profile({ user }: ProfileProps) {
               disabled={loading}
               className="w-full bg-primary text-white py-4 rounded-xl font-black uppercase tracking-widest hover:bg-primary-dark transition-all shadow-lg shadow-primary/20 disabled:opacity-50 active:scale-95"
             >
-              {loading ? '...' : (authMode === 'login' ? t('login') : t('signup'))}
+              {loading ? '...' : (authMode === 'login' ? t('login') || 'Login' : t('signup') || 'Sign Up')}
             </button>
           </form>
 
@@ -465,7 +456,7 @@ export default function Profile({ user }: ProfileProps) {
             className="w-full bg-white border border-gray-200 text-gray-700 py-4 rounded-xl font-bold hover:bg-primary/5 transition-colors flex items-center justify-center gap-3 shadow-sm"
           >
             <img src="https://fonts.gstatic.com/s/i/productlogos/googleg/v6/24px.svg" className="w-5 h-5" alt="Google" />
-            {t('login_google')}
+            {t('login_google') || 'Login with Google'}
           </button>
 
           <p className="text-center mt-8 text-sm text-gray-500">
@@ -474,7 +465,7 @@ export default function Profile({ user }: ProfileProps) {
               onClick={() => setAuthMode(authMode === 'login' ? 'signup' : 'login')}
               className="ml-1 text-primary font-black hover:underline uppercase tracking-wider text-xs"
             >
-              {authMode === 'login' ? t('signup') : t('login')}
+              {authMode === 'login' ? t('signup') || 'Sign Up' : t('login') || 'Login'}
             </button>
           </p>
         </motion.div>
@@ -491,7 +482,7 @@ export default function Profile({ user }: ProfileProps) {
             <button 
               onClick={() => setIsEditing(true)}
               className="absolute top-4 right-4 p-2 text-gray-400 hover:text-primary transition-colors"
-              title={t('edit_profile')}
+              title={t('edit_profile') || 'Edit Profile'}
             >
               <Edit2 size={20} />
             </button>
@@ -518,7 +509,7 @@ export default function Profile({ user }: ProfileProps) {
                 userData.role === 'agent' ? 'bg-primary/5 text-primary border-primary/10' :
                 'bg-gray-50 text-gray-500 border-gray-100'
               }`}>
-                {t(`role_${userData.role}`)}
+                {t(`role_${userData.role}`) || userData.role}
               </span>
             </div>
           )}
@@ -526,7 +517,7 @@ export default function Profile({ user }: ProfileProps) {
           {isEditing ? (
             <form onSubmit={handleUpdateProfile} className="space-y-4 text-left">
               <div>
-                <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">{t('name')}</label>
+                <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">{t('name') || 'Name'}</label>
                 <input 
                   type="text" 
                   value={fullName}
@@ -535,7 +526,7 @@ export default function Profile({ user }: ProfileProps) {
                 />
               </div>
               <div>
-                <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">{t('phone')}</label>
+                <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">{t('phone') || 'Phone'}</label>
                 <input 
                   type="tel" 
                   value={phoneNumber}
@@ -545,7 +536,7 @@ export default function Profile({ user }: ProfileProps) {
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">{t('id_type')}</label>
+                  <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">{t('id_type') || 'ID Type'}</label>
                   <select 
                     value={idType}
                     onChange={(e) => setIdType(e.target.value)}
@@ -557,7 +548,7 @@ export default function Profile({ user }: ProfileProps) {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">{t('id_number')}</label>
+                  <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">{t('id_number') || 'ID Number'}</label>
                   <input 
                     type="text" 
                     value={idNumber}
@@ -572,14 +563,14 @@ export default function Profile({ user }: ProfileProps) {
                   disabled={loading}
                   className="bg-primary text-white py-2 rounded-lg font-bold text-sm flex items-center justify-center gap-2 uppercase tracking-widest"
                 >
-                  <Save size={16} /> {t('save_changes')}
+                  <Save size={16} /> {t('save_changes') || 'Save'}
                 </button>
                 <button 
                   type="button"
                   onClick={() => setIsEditing(false)}
                   className="bg-gray-100 text-gray-600 py-2 rounded-lg font-bold text-sm flex items-center justify-center gap-2"
                 >
-                  <X size={16} /> {t('cancel')}
+                  <X size={16} /> {t('cancel') || 'Cancel'}
                 </button>
               </div>
             </form>
@@ -590,7 +581,7 @@ export default function Profile({ user }: ProfileProps) {
               <p className="text-primary font-black text-xs uppercase tracking-widest mb-2">{userData?.phoneNumber || "Pas de téléphone"}</p>
               <div className="flex justify-center gap-2 mb-2">
                 <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Rôle:</span>
-                <span className="text-[10px] font-black text-primary uppercase tracking-widest">{t(`role_${userData?.role || 'client'}`)}</span>
+                <span className="text-[10px] font-black text-primary uppercase tracking-widest">{t(`role_${userData?.role || 'client'}`) || userData?.role || 'client'}</span>
               </div>
               {userData?.idNumber && (
                 <p className="text-gray-500 text-[10px] font-bold uppercase tracking-widest mb-6">
@@ -621,23 +612,23 @@ export default function Profile({ user }: ProfileProps) {
             onClick={() => supabase.auth.signOut()}
             className="w-full flex items-center justify-center gap-2 text-accent font-black text-[10px] uppercase tracking-widest hover:bg-accent/5 py-3 rounded-xl transition-colors mb-4 border border-accent/10"
           >
-            <LogOut size={18} /> {t('logout')}
+            <LogOut size={18} /> {t('logout') || 'Logout'}
           </button>
 
           <div className="pt-6 border-t border-gray-100">
-            <h4 className="text-[10px] font-black text-accent uppercase tracking-widest mb-4 text-left">{t('danger_zone')}</h4>
+            <h4 className="text-[10px] font-black text-accent uppercase tracking-widest mb-4 text-left">{t('danger_zone') || 'Danger Zone'}</h4>
             <div className="space-y-2">
               <button 
                 onClick={handleSuspendSelf}
                 className="w-full flex items-center justify-center gap-2 text-primary font-black text-[10px] uppercase tracking-widest hover:bg-primary/5 py-2 rounded-lg transition-colors border border-primary/10"
               >
-                <AlertCircle size={14} /> {t('suspend_my_account')}
+                <AlertCircle size={14} /> {t('suspend_my_account') || 'Suspend Account'}
               </button>
               <button 
                 onClick={handleDeleteSelf}
                 className="w-full flex items-center justify-center gap-2 text-accent font-black text-[10px] uppercase tracking-widest hover:bg-accent/5 py-2 rounded-lg transition-colors border border-accent/10"
               >
-                <X size={14} /> {t('delete_my_account')}
+                <X size={14} /> {t('delete_my_account') || 'Delete Account'}
               </button>
             </div>
           </div>
@@ -647,11 +638,11 @@ export default function Profile({ user }: ProfileProps) {
         <div className="bg-white p-8 rounded-3xl shadow-sm border border-gray-100">
           <div className="flex items-center gap-2 mb-6">
             <Wallet className="text-primary" />
-            <h3 className="text-xl font-black text-gray-900 tracking-tight uppercase italic">{t('wallet')}</h3>
+            <h3 className="text-xl font-black text-gray-900 tracking-tight uppercase italic">{t('wallet') || 'Wallet'}</h3>
           </div>
           
           <div className="bg-primary text-white p-6 rounded-2xl mb-6 border-b-4 border-secondary shadow-lg">
-            <div className="text-[10px] text-white/60 font-black uppercase tracking-widest mb-1">{t('balance')}</div>
+            <div className="text-[10px] text-white/60 font-black uppercase tracking-widest mb-1">{t('balance') || 'Balance'}</div>
             <div className="text-3xl font-black text-secondary">{userData?.balance?.toLocaleString() || 0} HTG</div>
           </div>
 
@@ -686,7 +677,7 @@ export default function Profile({ user }: ProfileProps) {
               className="w-full bg-primary text-white py-3 rounded-xl font-black uppercase tracking-widest hover:bg-primary-dark transition-all flex items-center justify-center gap-2 disabled:opacity-50 shadow-lg shadow-primary/20"
             >
               {loading ? <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div> : <ArrowUpCircle size={18} />}
-              {t('top_up')}
+              {t('top_up') || 'Top Up'}
             </button>
           </div>
         </div>
@@ -697,7 +688,7 @@ export default function Profile({ user }: ProfileProps) {
         <section>
           <div className="flex items-center gap-2 mb-6">
             <History className="text-primary" />
-            <h2 className="text-2xl font-black text-gray-900 tracking-tight uppercase italic">{t('history')}</h2>
+            <h2 className="text-2xl font-black text-gray-900 tracking-tight uppercase italic">{t('history') || 'History'}</h2>
           </div>
 
           {tickets.length === 0 ? (
