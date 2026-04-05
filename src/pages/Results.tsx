@@ -23,45 +23,38 @@ export default function Results() {
 
   useEffect(() => {
     const fetchDraws = async () => {
-      let query = supabase
-        .from('draws')
-        .select('*')
-        .order('date', { ascending: false });
-      
-      if (filterType !== 'all') {
-        query = query.eq('type', filterType);
-      }
-
-      const { data, error } = await query;
-      
-      if (data) {
-        let results = data as Draw[];
-
-        if (searchDate) {
-          results = results.filter(draw => {
-            const drawDate = draw.date ? format(parseISO(draw.date), 'yyyy-MM-dd') : '';
-            return drawDate === searchDate;
-          });
+      try {
+        let query = supabase
+          .from('draws')
+          .select('*')
+          .order('date', { ascending: false });
+        
+        if (filterType !== 'all') {
+          query = query.eq('type', filterType);
         }
 
-        setDraws(results);
+        const { data } = await query;
+        
+        if (data) {
+          let results = data as Draw[];
+
+          if (searchDate) {
+            results = results.filter(draw => {
+              const drawDate = draw.date ? format(parseISO(draw.date), 'yyyy-MM-dd') : '';
+              return drawDate === searchDate;
+            });
+          }
+
+          setDraws(results);
+        }
+      } catch (err) {
+        console.error('Error fetching draws:', err);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     };
 
     fetchDraws();
-
-    // Set up real-time subscription
-    const channel = supabase
-      .channel('draws-results-changes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'draws' }, (payload) => {
-        fetchDraws();
-      })
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
   }, [filterType, searchDate]);
 
   const getDateLocale = () => {
@@ -74,7 +67,7 @@ export default function Results() {
     <div className="space-y-8">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-4xl font-black text-gray-900 tracking-tight">{t('results')}</h1>
+          <h1 className="text-4xl font-black text-gray-900 tracking-tight">{t('results') || 'Results'}</h1>
           <p className="text-gray-500">Archives complètes des tirages officiels</p>
         </div>
 
@@ -131,9 +124,9 @@ export default function Results() {
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-gray-50 text-gray-400 text-[10px] uppercase tracking-widest font-bold">
-                <th className="px-6 py-4">{t('date')}</th>
-                <th className="px-6 py-4">{t('draw_type')}</th>
-                <th className="px-6 py-4">{t('numbers')}</th>
+                <th className="px-6 py-4">{t('date') || 'Date'}</th>
+                <th className="px-6 py-4">{t('draw_type') || 'Type'}</th>
+                <th className="px-6 py-4">{t('numbers') || 'Numbers'}</th>
                 <th className="px-6 py-4 text-right">Jackpot</th>
               </tr>
             </thead>

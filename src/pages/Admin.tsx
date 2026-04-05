@@ -49,31 +49,24 @@ export default function Admin() {
     if (activeTab !== 'users') return;
     
     const fetchUsers = async () => {
-      const { data, error } = await supabase
-        .from('users')
-        .select('*')
-        .order('createdAt', { ascending: false })
-        .limit(50);
-      
-      if (error) {
-        handleSupabaseError(error, OperationType.LIST, 'users');
-      } else {
-        setUsers(data || []);
+      try {
+        const { data, error } = await supabase
+          .from('users')
+          .select('*')
+          .order('createdAt', { ascending: false })
+          .limit(50);
+        
+        if (error) {
+          handleSupabaseError(error, OperationType.LIST, 'users');
+        } else {
+          setUsers(data || []);
+        }
+      } catch (err) {
+        console.error('Error fetching users:', err);
       }
     };
 
     fetchUsers();
-
-    const channel = supabase
-      .channel('admin-users-changes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'users' }, (payload) => {
-        fetchUsers();
-      })
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
   }, [activeTab]);
 
   const handleUpdateRole = async (userId: string, newRole: string) => {
@@ -101,7 +94,7 @@ export default function Admin() {
   };
 
   const handleDeleteUser = async (userId: string) => {
-    if (!window.confirm(t('confirm_delete_user'))) return;
+    if (!window.confirm(t('confirm_delete_user') || 'Are you sure?')) return;
     try {
       const { error } = await supabase
         .from('users')
@@ -180,111 +173,68 @@ export default function Admin() {
               <div className="text-xs text-gray-400 font-bold uppercase tracking-widest mb-1">Ventes Totales</div>
               <div className="text-2xl font-black text-gray-900">{stats.totalSales.toLocaleString()} HTG</div>
             </div>
-
             <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100">
               <div className="flex justify-between items-start mb-4">
-                <div className="w-12 h-12 bg-blue-100 text-blue-600 rounded-2xl flex items-center justify-center">
+                <div className="w-12 h-12 bg-primary/10 text-primary rounded-2xl flex items-center justify-center">
                   <Users size={24} />
                 </div>
                 <div className="flex items-center gap-1 text-green-500 text-xs font-bold">
-                  <ArrowUpRight size={14} /> 4.2%
+                  <ArrowUpRight size={14} /> 8.2%
                 </div>
               </div>
-              <div className="text-xs text-gray-400 font-bold uppercase tracking-widest mb-1">Joueurs Actifs</div>
+              <div className="text-xs text-gray-400 font-bold uppercase tracking-widest mb-1">Utilisateurs Actifs</div>
               <div className="text-2xl font-black text-gray-900">{stats.activeUsers.toLocaleString()}</div>
             </div>
-
+            <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100">
+              <div className="flex justify-between items-start mb-4">
+                <div className="w-12 h-12 bg-accent/10 text-accent rounded-2xl flex items-center justify-center">
+                  <TrendingUp size={24} />
+                </div>
+                <div className="flex items-center gap-1 text-green-500 text-xs font-bold">
+                  <ArrowUpRight size={14} /> 5.3%
+                </div>
+              </div>
+              <div className="text-xs text-gray-400 font-bold uppercase tracking-widest mb-1">Paiements</div>
+              <div className="text-2xl font-black text-gray-900">{stats.payouts.toLocaleString()} HTG</div>
+            </div>
             <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100">
               <div className="flex justify-between items-start mb-4">
                 <div className="w-12 h-12 bg-green-100 text-green-600 rounded-2xl flex items-center justify-center">
-                  <Trophy size={24} />
+                  <BarChart3 size={24} />
                 </div>
-                <div className="flex items-center gap-1 text-red-500 text-xs font-bold">
+                <div className="flex items-center gap-1 text-green-500 text-xs font-bold">
                   <ArrowDownRight size={14} /> 2.1%
                 </div>
               </div>
-              <div className="text-xs text-gray-400 font-bold uppercase tracking-widest mb-1">Gains Payés</div>
-              <div className="text-2xl font-black text-gray-900">{stats.payouts.toLocaleString()} HTG</div>
-            </div>
-
-            <div className="bg-gray-900 text-white p-6 rounded-3xl shadow-xl">
-              <div className="flex justify-between items-start mb-4">
-                <div className="w-12 h-12 bg-primary text-white rounded-2xl flex items-center justify-center shadow-lg shadow-primary/50">
-                  <TrendingUp size={24} />
-                </div>
-              </div>
-              <div className="text-xs text-gray-400 font-bold uppercase tracking-widest mb-1">Performance</div>
-              <div className="text-2xl font-black">Excellent</div>
-              <div className="mt-4 h-1 w-full bg-gray-800 rounded-full overflow-hidden">
-                <div className="h-full bg-primary w-3/4"></div>
-              </div>
+              <div className="text-xs text-gray-400 font-bold uppercase tracking-widest mb-1">Croissance</div>
+              <div className="text-2xl font-black text-gray-900">+{stats.growth}%</div>
             </div>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            <div className="lg:col-span-2 bg-white p-8 rounded-3xl shadow-sm border border-gray-100">
-              <h3 className="text-xl font-black mb-6 flex items-center gap-2">
-                <BarChart3 className="text-primary" /> Ventes par Période
-              </h3>
-              <div className="h-64 flex items-end gap-4">
-                {[40, 60, 45, 80, 55, 90, 70].map((h, i) => (
-                  <div key={i} className="flex-1 flex flex-col items-center gap-2">
-                    <div 
-                      className="w-full bg-primary/10 hover:bg-primary transition-all rounded-t-xl cursor-pointer"
-                      style={{ height: `${h}%` }}
-                    ></div>
-                    <span className="text-[10px] font-bold text-gray-400 uppercase">Jour {i+1}</span>
+            <div className="lg:col-span-1">
+              <div className="bg-white p-8 rounded-3xl shadow-sm border border-gray-100">
+                <h3 className="text-lg font-black text-gray-900 mb-6">Ajouter un Tirage</h3>
+                <form onSubmit={handleAddDraw} className="space-y-4">
+                  <div>
+                    <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">Type de Tirage</label>
+                    <select 
+                      value={drawType}
+                      onChange={(e) => setDrawType(e.target.value)}
+                      className="w-full p-3 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-primary focus:outline-none font-bold"
+                    >
+                      {drawTypes.map(type => (
+                        <option key={type} value={type}>{type}</option>
+                      ))}
+                    </select>
                   </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="bg-white p-8 rounded-3xl shadow-sm border border-gray-100">
-              <h3 className="text-xl font-black mb-6">Dernières Actions</h3>
-              <div className="space-y-4">
-                {[1, 2, 3, 4].map(i => (
-                  <div key={i} className="flex items-center gap-3 p-3 hover:bg-gray-50 rounded-2xl transition-colors">
-                    <div className="w-10 h-10 bg-gray-100 rounded-xl flex items-center justify-center text-gray-400">
-                      <CheckCircle2 size={18} />
-                    </div>
-                    <div>
-                      <div className="text-sm font-bold text-gray-900">Tirage NY Ajouté</div>
-                      <div className="text-[10px] text-gray-400">Il y a 2 heures</div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {activeTab === 'draws' && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          <div className="lg:col-span-1">
-            <div className="bg-white p-8 rounded-3xl shadow-sm border border-gray-100 sticky top-24">
-              <h3 className="text-xl font-black mb-6 flex items-center gap-2">
-                <Plus className="text-primary" /> Nouveau Tirage
-              </h3>
-              <form onSubmit={handleAddDraw} className="space-y-4">
-                <div>
-                  <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">Type de Tirage</label>
-                  <select 
-                    value={drawType}
-                    onChange={(e) => setDrawType(e.target.value)}
-                    className="w-full p-3 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-primary focus:outline-none font-medium"
-                  >
-                    {drawTypes.map(t => <option key={t} value={t}>{t}</option>)}
-                  </select>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">Date</label>
                     <input 
                       type="date" 
                       value={drawDate}
                       onChange={(e) => setDrawDate(e.target.value)}
-                      className="w-full p-3 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-primary focus:outline-none font-medium"
+                      className="w-full p-3 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-primary focus:outline-none font-bold"
                     />
                   </div>
                   <div>
@@ -293,52 +243,51 @@ export default function Admin() {
                       type="time" 
                       value={drawTime}
                       onChange={(e) => setDrawTime(e.target.value)}
-                      className="w-full p-3 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-primary focus:outline-none font-medium"
+                      className="w-full p-3 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-primary focus:outline-none font-bold"
                     />
                   </div>
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">Numéros Gagnants</label>
-                  <div className="flex gap-2">
-                    {drawNumbers.map((num, i) => (
-                      <input 
-                        key={i}
-                        type="text"
-                        maxLength={2}
-                        value={num}
-                        onChange={(e) => {
-                          const newNums = [...drawNumbers];
-                          newNums[i] = e.target.value.replace(/\D/g, '');
-                          setDrawNumbers(newNums);
-                        }}
-                        className="w-full p-3 bg-gray-50 border border-gray-100 rounded-xl text-center font-black focus:ring-2 focus:ring-primary focus:outline-none"
-                        placeholder="00"
-                      />
-                    ))}
+                  <div>
+                    <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">Numéros Gagnants</label>
+                    <div className="grid grid-cols-3 gap-2">
+                      {drawNumbers.map((num, i) => (
+                        <input 
+                          key={i}
+                          type="text"
+                          maxLength={2}
+                          value={num}
+                          onChange={(e) => {
+                            const newNums = [...drawNumbers];
+                            newNums[i] = e.target.value.replace(/\D/g, '');
+                            setDrawNumbers(newNums);
+                          }}
+                          className="w-full p-3 bg-gray-50 border border-gray-100 rounded-xl text-center font-black focus:ring-2 focus:ring-primary focus:outline-none"
+                          placeholder="00"
+                        />
+                      ))}
+                    </div>
                   </div>
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">Jackpot (HTG)</label>
-                  <input 
-                    type="number" 
-                    value={drawJackpot}
-                    onChange={(e) => setDrawJackpot(Number(e.target.value))}
-                    className="w-full p-3 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-primary focus:outline-none font-black"
-                  />
-                </div>
-                <button 
-                  type="submit"
-                  disabled={loading}
-                  className="w-full bg-primary text-white py-4 rounded-xl font-bold hover:bg-primary-dark transition-colors shadow-lg shadow-primary/20 disabled:opacity-50"
-                >
-                  {loading ? 'Enregistrement...' : 'Publier le Tirage'}
-                </button>
-              </form>
+                  <div>
+                    <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">Jackpot (HTG)</label>
+                    <input 
+                      type="number" 
+                      value={drawJackpot}
+                      onChange={(e) => setDrawJackpot(Number(e.target.value))}
+                      className="w-full p-3 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-primary focus:outline-none font-black"
+                    />
+                  </div>
+                  <button 
+                    type="submit"
+                    disabled={loading}
+                    className="w-full bg-primary text-white py-4 rounded-xl font-bold hover:bg-primary-dark transition-colors shadow-lg shadow-primary/20 disabled:opacity-50"
+                  >
+                    {loading ? 'Enregistrement...' : 'Publier le Tirage'}
+                  </button>
+                </form>
+              </div>
             </div>
-          </div>
 
-          <div className="lg:col-span-2">
-             <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
+            <div className="lg:col-span-2">
+              <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
                 <div className="p-6 border-b border-gray-50 flex justify-between items-center">
                   <h3 className="font-black text-gray-900">Derniers Tirages</h3>
                   <button className="text-primary font-bold text-xs hover:underline">Voir tout</button>
@@ -365,7 +314,8 @@ export default function Admin() {
                     </div>
                   ))}
                 </div>
-             </div>
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -426,17 +376,17 @@ export default function Admin() {
                         'bg-gray-100 text-gray-500'
                       }`}
                     >
-                      <option value="client">{t('role_client')}</option>
-                      <option value="agent">{t('role_agent')}</option>
-                      <option value="supervisor">{t('role_supervisor')}</option>
-                      <option value="admin">{t('role_admin')}</option>
+                      <option value="client">{t('role_client') || 'Client'}</option>
+                      <option value="agent">{t('role_agent') || 'Agent'}</option>
+                      <option value="supervisor">{t('role_supervisor') || 'Supervisor'}</option>
+                      <option value="admin">{t('role_admin') || 'Admin'}</option>
                     </select>
                   </td>
                   <td className="px-6 py-4">
                     <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${
                       user.status === 'suspended' ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-600'
                     }`}>
-                      {t(`status_${user.status || 'active'}`)}
+                      {t(`status_${user.status || 'active'}`) || (user.status || 'Active')}
                     </span>
                   </td>
                   <td className="px-6 py-4 text-sm font-bold text-gray-900">{user.loyaltyPoints?.toLocaleString() || 0}</td>
@@ -449,7 +399,7 @@ export default function Admin() {
                         <button 
                           onClick={() => handleUpdateStatus(user.id, 'active')}
                           className="text-green-500 hover:text-green-700 transition-colors p-2"
-                          title={t('activate')}
+                          title={t('activate') || 'Activate'}
                         >
                           <CheckCircle size={18} />
                         </button>
@@ -457,7 +407,7 @@ export default function Admin() {
                         <button 
                           onClick={() => handleUpdateStatus(user.id, 'suspended')}
                           className="text-accent hover:text-accent-dark transition-colors p-2"
-                          title={t('suspend')}
+                          title={t('suspend') || 'Suspend'}
                         >
                           <UserX size={18} />
                         </button>
@@ -465,7 +415,7 @@ export default function Admin() {
                       <button 
                         onClick={() => handleDeleteUser(user.id)}
                         className="text-red-400 hover:text-red-600 transition-colors p-2"
-                        title={t('delete')}
+                        title={t('delete') || 'Delete'}
                       >
                         <Trash2 size={18} />
                       </button>

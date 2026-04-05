@@ -19,58 +19,42 @@ export default function Supervisor() {
   const [activeTab, setActiveTab] = useState('agents');
   const [agents, setAgents] = useState<any[]>([]);
   const [recentTickets, setRecentTickets] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const fetchAgents = async () => {
-      const { data, error } = await supabase
-        .from('users')
-        .select('*')
-        .eq('role', 'agent')
-        .limit(10);
-      
-      if (error) {
-        handleSupabaseError(error, OperationType.GET, 'users');
-      } else {
-        setAgents(data || []);
+    const fetchData = async () => {
+      try {
+        const { data: agentsData, error: agentsError } = await supabase
+          .from('users')
+          .select('*')
+          .eq('role', 'agent')
+          .limit(10);
+        
+        if (agentsError) {
+          handleSupabaseError(agentsError, OperationType.GET, 'users');
+        } else {
+          setAgents(agentsData || []);
+        }
+
+        const { data: ticketsData, error: ticketsError } = await supabase
+          .from('tickets')
+          .select('*')
+          .order('createdAt', { ascending: false })
+          .limit(10);
+        
+        if (ticketsError) {
+          handleSupabaseError(ticketsError, OperationType.GET, 'tickets');
+        } else {
+          setRecentTickets(ticketsData || []);
+        }
+      } catch (err) {
+        console.error('Error fetching supervisor data:', err);
+      } finally {
+        setLoading(false);
       }
     };
 
-    const fetchTickets = async () => {
-      const { data, error } = await supabase
-        .from('tickets')
-        .select('*')
-        .order('createdAt', { ascending: false })
-        .limit(10);
-      
-      if (error) {
-        handleSupabaseError(error, OperationType.GET, 'tickets');
-      } else {
-        setRecentTickets(data || []);
-      }
-    };
-
-    fetchAgents();
-    fetchTickets();
-
-    // Set up real-time subscriptions
-    const agentsChannel = supabase
-      .channel('supervisor-agents-changes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'users', filter: 'role=eq.agent' }, (payload) => {
-        fetchAgents();
-      })
-      .subscribe();
-
-    const ticketsChannel = supabase
-      .channel('supervisor-tickets-changes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'tickets' }, (payload) => {
-        fetchTickets();
-      })
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(agentsChannel);
-      supabase.removeChannel(ticketsChannel);
-    };
+    fetchData();
   }, []);
 
   return (
@@ -109,7 +93,7 @@ export default function Supervisor() {
           </div>
           <div>
             <div className="text-xs text-gray-400 font-bold uppercase tracking-widest">Agents Actifs</div>
-            <div className="text-2xl font-black text-gray-900">124</div>
+            <div className="text-2xl font-black text-gray-900">{agents.length}</div>
           </div>
         </div>
         <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 flex items-center gap-4">
@@ -118,7 +102,7 @@ export default function Supervisor() {
           </div>
           <div>
             <div className="text-xs text-gray-400 font-bold uppercase tracking-widest">Ventes (Heure)</div>
-            <div className="text-2xl font-black text-gray-900">842</div>
+            <div className="text-2xl font-black text-gray-900">{recentTickets.length}</div>
           </div>
         </div>
         <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 flex items-center gap-4">
@@ -127,7 +111,7 @@ export default function Supervisor() {
           </div>
           <div>
             <div className="text-xs text-gray-400 font-bold uppercase tracking-widest">Alertes</div>
-            <div className="text-2xl font-black text-gray-900">3</div>
+            <div className="text-2xl font-black text-gray-900">0</div>
           </div>
         </div>
       </div>
@@ -158,7 +142,7 @@ export default function Supervisor() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
-              {agents.map((agent, i) => (
+              {agents.map((agent) => (
                 <tr key={agent.id} className="hover:bg-gray-50 transition-colors">
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-3">
@@ -166,8 +150,8 @@ export default function Supervisor() {
                         {agent.displayName?.substring(0, 2) || 'AG'}
                       </div>
                       <div>
-                        <div className="text-sm font-bold text-gray-900">{agent.displayName}</div>
-                        <div className="text-[10px] text-gray-400">{agent.phoneNumber}</div>
+                        <div className="text-sm font-bold text-gray-900">{agent.displayName || 'Agent'}</div>
+                        <div className="text-[10px] text-gray-400">{agent.phoneNumber || 'N/A'}</div>
                       </div>
                     </div>
                   </td>
@@ -195,33 +179,39 @@ export default function Supervisor() {
             <h3 className="font-black text-gray-900">Flux de Billets en Temps Réel</h3>
           </div>
           <div className="divide-y divide-gray-50">
-            {recentTickets.map(ticket => (
-              <div key={ticket.id} className="p-6 flex items-center justify-between hover:bg-gray-50 transition-colors">
-                <div className="flex items-center gap-4">
-                  <div className="w-10 h-10 bg-gray-100 text-gray-400 rounded-xl flex items-center justify-center">
-                    <Ticket size={20} />
-                  </div>
-                  <div>
-                    <div className="text-sm font-bold text-gray-900">{ticket.drawType || ticket.lottery + ' - ' + ticket.gameType}</div>
-                    <div className="text-[10px] text-gray-400">ID: {ticket.id.substring(0, 8)}... • Agent: {ticket.agentId?.substring(0, 6) || 'Web'}</div>
-                  </div>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {ticket.numbers?.map((n: string, i: number) => (
-                    <div key={i} className="flex flex-col items-center">
-                      <span className="w-6 h-6 rounded-full bg-gray-100 text-gray-600 flex items-center justify-center font-bold text-[10px]">{n}</span>
-                      {ticket.individualAmounts?.[i] && (
-                        <span className="text-[8px] font-bold text-gray-400">{ticket.individualAmounts[i]}</span>
-                      )}
-                    </div>
-                  ))}
-                </div>
-                <div className="text-right">
-                  <div className="text-sm font-black text-gray-900">{ticket.amount} HTG</div>
-                  <div className="text-[10px] text-gray-400 uppercase font-bold">{ticket.type}</div>
-                </div>
+            {recentTickets.length === 0 ? (
+              <div className="p-12 text-center text-gray-400">
+                Aucun billet trouvé
               </div>
-            ))}
+            ) : (
+              recentTickets.map(ticket => (
+                <div key={ticket.id} className="p-6 flex items-center justify-between hover:bg-gray-50 transition-colors">
+                  <div className="flex items-center gap-4">
+                    <div className="w-10 h-10 bg-gray-100 text-gray-400 rounded-xl flex items-center justify-center">
+                      <Ticket size={20} />
+                    </div>
+                    <div>
+                      <div className="text-sm font-bold text-gray-900">{ticket.drawType || ticket.lottery + ' - ' + ticket.gameType}</div>
+                      <div className="text-[10px] text-gray-400">ID: {ticket.id.substring(0, 8)}... • Agent: {ticket.agentId?.substring(0, 6) || 'Web'}</div>
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {ticket.numbers?.map((n: string, i: number) => (
+                      <div key={i} className="flex flex-col items-center">
+                        <span className="w-6 h-6 rounded-full bg-gray-100 text-gray-600 flex items-center justify-center font-bold text-[10px]">{n}</span>
+                        {ticket.individualAmounts?.[i] && (
+                          <span className="text-[8px] font-bold text-gray-400">{ticket.individualAmounts[i]}</span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                  <div className="text-right">
+                    <div className="text-sm font-black text-gray-900">{ticket.amount} HTG</div>
+                    <div className="text-[10px] text-gray-400 uppercase font-bold">{ticket.type}</div>
+                  </div>
+                </div>
+              ))
+            )}
           </div>
         </div>
       )}

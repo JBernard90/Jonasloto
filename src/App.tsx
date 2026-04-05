@@ -35,40 +35,96 @@ export default function App() {
       return;
     }
 
+    // Initialize auth state
+    const initializeAuth = async () => {
+      try {
+        // Get current session
+        const { data: { session }, error } = await supabase.auth.getSession();
+        
+        if (error) {
+          console.error('Auth error:', error);
+          setLoading(false);
+          return;
+        }
+
+        const supabaseUser = session?.user || null;
+        setUser(supabaseUser);
+        
+        if (supabaseUser) {
+          try {
+            const { data: userData } = await supabase
+              .from('users')
+              .select('*')
+              .eq('uid', supabaseUser.id)
+              .single();
+
+            if (userData) {
+              let userRole = userData.role;
+              
+              // Force admin role for the owner email if not already set
+              if (supabaseUser.email === 'jeanbernardpierrelouis@gmail.com' && userRole !== 'admin') {
+                userRole = 'admin';
+              }
+              
+              setRole(userRole);
+              setIsSuspended(userData.status === 'suspended');
+            } else {
+              // If document doesn't exist yet (first login)
+              if (supabaseUser.email === 'jeanbernardpierrelouis@gmail.com') {
+                setRole('admin');
+              } else {
+                setRole('client');
+              }
+            }
+          } catch (dbError) {
+            console.error('Database error:', dbError);
+            // Set default role if database query fails
+            setRole(supabaseUser.email === 'jeanbernardpierrelouis@gmail.com' ? 'admin' : 'client');
+          }
+        } else {
+          setRole(null);
+          setIsSuspended(false);
+        }
+        setLoading(false);
+      } catch (err) {
+        console.error('Initialization error:', err);
+        setLoading(false);
+      }
+    };
+
+    initializeAuth();
+
+    // Simple auth state listener (without Realtime)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       const supabaseUser = session?.user || null;
       setUser(supabaseUser);
       
-      if (supabaseUser) {
-        const { data: userData, error } = await supabase
-          .from('users')
-          .select('*')
-          .eq('uid', supabaseUser.id)
-          .single();
+      if (supabaseUser && event === 'SIGNED_IN') {
+        try {
+          const { data: userData } = await supabase
+            .from('users')
+            .select('*')
+            .eq('uid', supabaseUser.id)
+            .single();
 
-        if (userData) {
-          let userRole = userData.role;
-          
-          // Force admin role for the owner email if not already set
-          if (supabaseUser.email === 'jeanbernardpierrelouis@gmail.com' && userRole !== 'admin') {
-            userRole = 'admin';
-          }
-          
-          setRole(userRole);
-          setIsSuspended(userData.status === 'suspended');
-        } else {
-          // If document doesn't exist yet (first login)
-          if (supabaseUser.email === 'jeanbernardpierrelouis@gmail.com') {
-            setRole('admin');
+          if (userData) {
+            let userRole = userData.role;
+            if (supabaseUser.email === 'jeanbernardpierrelouis@gmail.com' && userRole !== 'admin') {
+              userRole = 'admin';
+            }
+            setRole(userRole);
+            setIsSuspended(userData.status === 'suspended');
           } else {
-            setRole('client');
+            setRole(supabaseUser.email === 'jeanbernardpierrelouis@gmail.com' ? 'admin' : 'client');
           }
+        } catch (err) {
+          console.error('Error fetching user data:', err);
+          setRole(supabaseUser.email === 'jeanbernardpierrelouis@gmail.com' ? 'admin' : 'client');
         }
-      } else {
+      } else if (event === 'SIGNED_OUT') {
         setRole(null);
         setIsSuspended(false);
       }
-      setLoading(false);
     });
 
     return () => subscription.unsubscribe();
@@ -83,7 +139,7 @@ export default function App() {
           </div>
           <h1 className="text-2xl font-black text-gray-900 mb-2 italic uppercase tracking-tight">Configuration Requise</h1>
           <p className="text-gray-500 mb-6 leading-relaxed">
-            Les variables d'environnement Supabase sont manquantes. Veuillez les configurer dans le menu <strong>Settings</strong> de Google AI Studio.
+            Les variables d'environnement Supabase sont manquantes. Veuillez les configurer dans le menu <strong>Settings</strong>.
           </p>
           <div className="space-y-4 text-left bg-gray-50 p-4 rounded-xl border border-gray-100 text-sm font-mono">
             <div>VITE_SUPABASE_URL</div>

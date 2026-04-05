@@ -23,31 +23,24 @@ export default function Home() {
 
   useEffect(() => {
     const fetchRecentDraws = async () => {
-      const { data, error } = await supabase
-        .from('draws')
-        .select('*')
-        .order('date', { ascending: false })
-        .limit(6);
-      
-      if (data) {
-        setRecentDraws(data);
+      try {
+        const { data } = await supabase
+          .from('draws')
+          .select('*')
+          .order('date', { ascending: false })
+          .limit(6);
+        
+        if (data) {
+          setRecentDraws(data);
+        }
+      } catch (err) {
+        console.error('Error fetching draws:', err);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     };
 
     fetchRecentDraws();
-
-    // Set up real-time subscription
-    const channel = supabase
-      .channel('draws-changes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'draws' }, (payload) => {
-        fetchRecentDraws();
-      })
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
   }, []);
 
   const getDateLocale = () => {
@@ -74,14 +67,14 @@ export default function Home() {
               to="/buy" 
               className="bg-secondary text-primary px-8 py-4 rounded-full font-black text-lg hover:bg-white transition-all flex items-center gap-2 shadow-lg hover:scale-105 uppercase tracking-wider"
             >
-              {t('buy_ticket')}
+              {t('buy_ticket') || 'Buy Ticket'}
               <ArrowRight size={20} />
             </Link>
             <Link 
               to="/results" 
               className="bg-primary-dark/40 backdrop-blur-sm border border-white/20 text-white px-8 py-4 rounded-full font-bold text-lg hover:bg-primary-dark/60 transition-all uppercase tracking-wider"
             >
-              {t('results')}
+              {t('results') || 'Results'}
             </Link>
           </div>
         </div>
@@ -95,7 +88,7 @@ export default function Home() {
       <section>
         <div className="flex justify-between items-end mb-8">
           <div>
-            <h2 className="text-3xl font-black text-gray-900 tracking-tight">{t('recent_results')}</h2>
+            <h2 className="text-3xl font-black text-gray-900 tracking-tight">{t('recent_results') || 'Recent Results'}</h2>
             <p className="text-gray-500">Derniers tirages officiels</p>
           </div>
           <Link to="/results" className="text-primary font-black flex items-center gap-1 hover:underline uppercase text-sm tracking-wider">
@@ -183,13 +176,13 @@ export default function Home() {
             <span className="text-primary">Become</span> <span className="text-accent">an Agent</span>
           </h2>
           <p className="text-gray-600 mb-6">
-            {t('become_agent_desc')} Profitez de notre technologie avancée et de notre support dédié pour développer votre propre entreprise de loterie.
+            {t('become_agent_desc') || 'Become an agent'} Profitez de notre technologie avancée et de notre support dédié pour développer votre propre entreprise de loterie.
           </p>
           <Link 
             to="/contact" 
             className="inline-flex items-center gap-2 text-primary font-black uppercase text-sm tracking-widest hover:gap-3 transition-all"
           >
-            {t('join_network')} <ArrowRight size={18} />
+            {t('join_network') || 'Join Network'} <ArrowRight size={18} />
           </Link>
         </div>
         <div className="hidden md:block">
