@@ -55,6 +55,18 @@ export default function Results() {
     };
 
     fetchDraws();
+
+    // Real-time listener for draw changes
+    const channel = supabase
+      .channel('draws-all')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'draws' }, (payload) => {
+        fetchDraws();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [filterType, searchDate]);
 
   const getDateLocale = () => {
@@ -68,7 +80,7 @@ export default function Results() {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-4xl font-black text-gray-900 tracking-tight">{t('results') || 'Results'}</h1>
-          <p className="text-gray-500">Archives complètes des tirages officiels</p>
+          <p className="text-gray-500">Archives complètes des tirages officiels (Mise à jour en temps réel)</p>
         </div>
 
         <div className="flex flex-wrap gap-3">

@@ -1,753 +1,237 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { User } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
+import { useNavigate } from 'react-router-dom';
 import { motion } from 'motion/react';
-import { 
-  User as UserIcon, 
-  Mail, 
-  Lock, 
-  History, 
-  Star, 
-  Smartphone, 
-  LogOut,
-  ChevronRight,
-  Ticket,
-  Wallet,
-  PlusCircle,
-  ArrowUpCircle,
-  Calendar,
-  Edit2,
-  Save,
-  X,
-  AlertCircle,
-  ShieldCheck
-} from 'lucide-react';
-import { Link } from 'react-router-dom';
-import { format, differenceInYears, parseISO } from 'date-fns';
-import { fr, enUS } from 'date-fns/locale';
-import Logo from '../components/Logo';
+import { Mail, Lock, User, Eye, EyeOff, Loader } from 'lucide-react';
 
-interface ProfileProps {
-  user: User | null;
-}
-
-interface TicketData {
-  id: string;
-  borlette: string;
-  lotos: string[];
-  entries: Record<string, { numbers: string[], amounts: number[] }>;
-  amount: number;
-  status: string;
-  createdAt: string;
-}
-
-export default function Profile({ user }: ProfileProps) {
-  const { t, i18n } = useTranslation();
-  const [authMode, setAuthMode] = useState<'login' | 'signup'>('login');
-  const [isEditing, setIsEditing] = useState(false);
+export default function Profile({ user }: { user: any }) {
+  const { t } = useTranslation();
+  const navigate = useNavigate();
+  const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [fullName, setFullName] = useState('');
+  const [displayName, setDisplayName] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
-  const [dateOfBirth, setDateOfBirth] = useState('');
-  const [idType, setIdType] = useState('CIN');
-  const [idNumber, setIdNumber] = useState('');
-  const [selectedRole, setSelectedRole] = useState('client');
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [tickets, setTickets] = useState<TicketData[]>([]);
-  const [userData, setUserData] = useState<any>(null);
-  const [topUpAmount, setTopUpAmount] = useState(500);
-  const [topUpMethod, setTopUpMethod] = useState('MonCash');
+  const [error, setError] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
 
-  useEffect(() => {
-    if (!user) return;
-
-    // Fetch user profile data
-    const fetchProfile = async () => {
-      try {
-        const { data: userData, error } = await supabase
-          .from('users')
-          .select('*')
-          .eq('uid', user.id)
-          .single();
-
-        if (userData) {
-          setUserData(userData);
-          setFullName(userData.displayName || '');
-          setPhoneNumber(userData.phoneNumber || '');
-          setDateOfBirth(userData.dateOfBirth || '');
-          setIdType(userData.idType || 'CIN');
-          setIdNumber(userData.idNumber || '');
-        } else {
-          // Create profile if not exists (e.g. after Google login)
-          const newProfile = {
-            uid: user.id,
-            email: user.email || '',
-            displayName: user.user_metadata?.full_name || 'Joueur',
-            phoneNumber: '',
-            dateOfBirth: '',
-            idType: 'CIN',
-            idNumber: '',
-            role: selectedRole,
-            loyaltyPoints: 0,
-            balance: 0,
-            createdAt: new Date().toISOString()
-          };
-          const { data: createdUser } = await supabase
-            .from('users')
-            .insert([newProfile])
-            .select()
-            .single();
-          
-          if (createdUser) {
-            setUserData(createdUser);
-            setFullName(createdUser.displayName);
-          }
-        }
-      } catch (err) {
-        console.error('Error fetching profile:', err);
-      }
-    };
-    fetchProfile();
-
-    // Fetch ticket history (without Realtime)
-    const fetchTickets = async () => {
-      try {
-        const { data: ticketList } = await supabase
-          .from('tickets')
-          .select('*')
-          .eq('userId', user.id)
-          .order('createdAt', { ascending: false });
-        
-        if (ticketList) {
-          setTickets(ticketList);
-        }
-      } catch (err) {
-        console.error('Error fetching tickets:', err);
-      }
-    };
-    fetchTickets();
-  }, [user]);
-
-  const handleAuth = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError('');
     setLoading(true);
-    setError(null);
-
-    if (authMode === 'signup') {
-      if (dateOfBirth) {
-        const age = differenceInYears(new Date(), new Date(dateOfBirth));
-        if (age < 18) {
-          setError(t('age_error') || 'You must be 18 or older');
-          setLoading(false);
-          return;
-        }
-      }
-    }
 
     try {
-      if (authMode === 'login') {
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
+      if (isLogin) {
+        const { error } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
         if (error) throw error;
+        navigate('/');
       } else {
-        const { data: res, error: signUpError } = await supabase.auth.signUp({ 
-          email, 
+        const { error: signUpError } = await supabase.auth.signUp({
+          email,
           password,
           options: {
             data: {
-              full_name: fullName,
-              phone: phoneNumber
+              displayName,
+              phoneNumber,
             }
           }
         });
         if (signUpError) throw signUpError;
-        
-        if (res.user) {
-          const { error: insertError } = await supabase
+
+        const { data: { user: newUser } } = await supabase.auth.getUser();
+        if (newUser) {
+          await supabase
             .from('users')
-            .insert([{
-              uid: res.user.id,
+            .insert({
+              uid: newUser.id,
               email,
-              displayName: fullName,
+              displayName,
               phoneNumber,
-              dateOfBirth,
-              idType,
-              idNumber,
-              role: selectedRole,
-              loyaltyPoints: 0,
-              balance: 0,
-              createdAt: new Date().toISOString()
-            }]);
-          if (insertError) throw insertError;
+              role: 'client',
+              status: 'active'
+            });
         }
+
+        alert('Inscription réussie! Vérifiez votre email pour confirmer votre compte.');
+        setIsLogin(true);
+        setEmail('');
+        setPassword('');
+        setDisplayName('');
+        setPhoneNumber('');
       }
     } catch (err: any) {
-      setError(err.message || 'An error occurred');
+      setError(err.message || 'Une erreur est survenue');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleUpdateProfile = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!user) return;
-    setLoading(true);
-    try {
-      const updatedData = {
-        displayName: fullName,
-        phoneNumber,
-        dateOfBirth,
-        idType,
-        idNumber
-      };
-      const { error } = await supabase
-        .from('users')
-        .update(updatedData)
-        .eq('uid', user.id);
-      
-      if (error) throw error;
-      
-      setUserData({ ...userData, ...updatedData });
-      setIsEditing(false);
-    } catch (error) {
-      console.error("Update profile error:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleTopUp = async () => {
-    if (!user || !userData) return;
-    setLoading(true);
-    try {
-      const response = await fetch('/api/payments/initiate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ method: topUpMethod, amount: topUpAmount, phoneNumber: userData.phoneNumber || phoneNumber })
-      });
-      const data = await response.json();
-
-      if (data.success) {
-        const newBalance = (userData.balance || 0) + topUpAmount;
-        const { error } = await supabase
-          .from('users')
-          .update({ balance: newBalance })
-          .eq('uid', user.id);
-        
-        if (error) throw error;
-        
-        setUserData({ ...userData, balance: newBalance });
-        alert(t('top_up_success') || 'Top up successful');
-      }
-    } catch (error) {
-      console.error("Top up error:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleGoogleLogin = async () => {
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: {
-        redirectTo: window.location.origin + '/profile'
-      }
-    });
-    if (error) console.error("Google login error:", error);
-  };
-
-  const handleSuspendSelf = async () => {
-    if (!user) return;
-    if (!window.confirm(t('confirm_suspend_self') || 'Are you sure?')) return;
-    
-    setLoading(true);
-    try {
-      const { error } = await supabase
-        .from('users')
-        .update({ status: 'suspended' })
-        .eq('uid', user.id);
-      
-      if (error) throw error;
-      await supabase.auth.signOut();
-    } catch (error) {
-      console.error("Suspend self error:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleDeleteSelf = async () => {
-    if (!user) return;
-    if (!window.confirm(t('confirm_delete_self') || 'Are you sure?')) return;
-    
-    setLoading(true);
-    try {
-      const { error: dbError } = await supabase
-        .from('users')
-        .delete()
-        .eq('uid', user.id);
-      
-      if (dbError) throw dbError;
-      
-      await supabase.auth.signOut();
-      alert("Votre compte a été supprimé de notre base de données.");
-    } catch (error) {
-      console.error("Delete self error:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const getDateLocale = () => i18n.language === 'fr' ? fr : enUS;
-
-  if (!user) {
+  if (user) {
     return (
-      <div className="max-w-md mx-auto py-12">
-        <motion.div 
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="bg-white p-8 rounded-3xl shadow-xl border border-gray-100"
-        >
-          <div className="text-center mb-8">
-            <div className="mb-6">
-              <Logo className="mx-auto" />
-            </div>
-            <h1 className="text-3xl font-black tracking-tight uppercase italic">
-              <span className="text-primary">{authMode === 'login' ? 'Connexion' : 'Inscription'}</span>
-            </h1>
-            <p className="text-gray-500 text-[10px] font-bold uppercase tracking-widest mt-2">
-              {authMode === 'login' ? t('login_email') : t('signup_email')}
-            </p>
-          </div>
-
-          <div className="bg-gray-50 p-4 rounded-2xl border border-gray-100 mb-6">
-            <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3 text-center">
-              Je suis un :
-            </label>
-            <div className="grid grid-cols-2 gap-2">
-              {[
-                { id: 'client', icon: UserIcon },
-                { id: 'agent', icon: Smartphone },
-                { id: 'supervisor', icon: ShieldCheck },
-                { id: 'admin', icon: Lock }
-              ].map((r) => (
-                <button
-                  key={r.id}
-                  type="button"
-                  onClick={() => setSelectedRole(r.id)}
-                  className={`flex items-center justify-center gap-2 py-2 px-3 rounded-xl border-2 transition-all text-[10px] font-bold uppercase tracking-wider ${
-                    selectedRole === r.id 
-                      ? 'border-primary bg-primary text-white shadow-md' 
-                      : 'border-gray-100 bg-white text-gray-400 hover:border-primary/20'
-                  }`}
-                >
-                  <r.icon size={14} />
-                  {t(`role_${r.id}`) || r.id}
-                </button>
-              ))}
+      <div className="max-w-md mx-auto">
+        <div className="bg-white p-8 rounded-3xl shadow-sm border border-gray-100">
+          <h1 className="text-2xl font-black text-gray-900 mb-6">Mon Compte</h1>
+          <div className="space-y-4 mb-6">
+            <div className="p-4 bg-gray-50 rounded-xl">
+              <div className="text-xs text-gray-400 font-bold uppercase tracking-widest mb-1">Email</div>
+              <div className="text-sm font-bold text-gray-900">{user.email}</div>
             </div>
           </div>
-
-          <form onSubmit={handleAuth} className="space-y-4">
-            {authMode === 'signup' && (
-              <>
-                <div className="relative">
-                  <UserIcon size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
-                  <input 
-                    type="text" 
-                    placeholder={t('full_name') || 'Full Name'}
-                    value={fullName}
-                    onChange={(e) => setFullName(e.target.value)}
-                    className="w-full pl-12 pr-4 py-3 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-primary focus:outline-none font-medium"
-                    required
-                  />
-                </div>
-                <div className="relative">
-                  <Smartphone size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
-                  <input 
-                    type="tel" 
-                    placeholder={t('phone') || 'Phone'}
-                    value={phoneNumber}
-                    onChange={(e) => setPhoneNumber(e.target.value)}
-                    className="w-full pl-12 pr-4 py-3 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-primary focus:outline-none font-medium"
-                    required
-                  />
-                </div>
-                <div className="relative">
-                  <Calendar size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
-                  <input 
-                    type="date" 
-                    value={dateOfBirth}
-                    onChange={(e) => setDateOfBirth(e.target.value)}
-                    className="w-full pl-12 pr-4 py-3 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-primary focus:outline-none font-medium"
-                    required
-                    title={t('dob') || 'Date of Birth'}
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="relative">
-                    <ShieldCheck size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
-                    <select 
-                      value={idType}
-                      onChange={(e) => setIdType(e.target.value)}
-                      className="w-full pl-12 pr-4 py-3 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-primary focus:outline-none font-medium appearance-none"
-                      required
-                    >
-                      <option value="CIN">{t('cin') || 'CIN'}</option>
-                      <option value="NIF">{t('nif') || 'NIF'}</option>
-                      <option value="Passport">{t('passport') || 'Passport'}</option>
-                    </select>
-                  </div>
-                  <input 
-                    type="text" 
-                    placeholder={t('id_number') || 'ID Number'}
-                    value={idNumber}
-                    onChange={(e) => setIdNumber(e.target.value)}
-                    className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-primary focus:outline-none font-medium"
-                    required
-                  />
-                </div>
-              </>
-            )}
-            <div className="relative">
-              <Mail size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
-              <input 
-                type="email" 
-                placeholder={t('email') || 'Email'}
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full pl-12 pr-4 py-3 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-primary focus:outline-none font-medium"
-                required
-              />
-            </div>
-            <p className="text-[10px] text-gray-400 italic ml-1">{t('any_email_hint') || 'Any email works'}</p>
-            <div className="relative">
-              <Lock size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
-              <input 
-                type="password" 
-                placeholder={t('password') || 'Password'}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full pl-12 pr-4 py-3 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-primary focus:outline-none font-medium"
-                required
-              />
-            </div>
-
-            {error && <p className="text-red-500 text-xs font-bold bg-red-50 p-3 rounded-lg">{error}</p>}
-
-            <button 
-              type="submit"
-              disabled={loading}
-              className="w-full bg-primary text-white py-4 rounded-xl font-black uppercase tracking-widest hover:bg-primary-dark transition-all shadow-lg shadow-primary/20 disabled:opacity-50 active:scale-95"
-            >
-              {loading ? '...' : (authMode === 'login' ? t('login') || 'Login' : t('signup') || 'Sign Up')}
-            </button>
-          </form>
-
-          <div className="relative my-8">
-            <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-gray-100"></div></div>
-            <div className="relative flex justify-center text-[10px] uppercase font-black"><span className="bg-white px-2 text-gray-300 tracking-widest">Ou</span></div>
-          </div>
-
-          <button 
-            onClick={handleGoogleLogin}
-            className="w-full bg-white border border-gray-200 text-gray-700 py-4 rounded-xl font-bold hover:bg-primary/5 transition-colors flex items-center justify-center gap-3 shadow-sm"
+          <button
+            onClick={() => supabase.auth.signOut()}
+            className="w-full bg-gray-900 text-white py-3 rounded-xl font-bold hover:bg-gray-800 transition-colors"
           >
-            <img src="https://fonts.gstatic.com/s/i/productlogos/googleg/v6/24px.svg" className="w-5 h-5" alt="Google" />
-            {t('login_google') || 'Login with Google'}
+            Se déconnecter
           </button>
-
-          <p className="text-center mt-8 text-sm text-gray-500">
-            {authMode === 'login' ? t('no_account') : t('already_account')}
-            <button 
-              onClick={() => setAuthMode(authMode === 'login' ? 'signup' : 'login')}
-              className="ml-1 text-primary font-black hover:underline uppercase tracking-wider text-xs"
-            >
-              {authMode === 'login' ? t('signup') || 'Sign Up' : t('login') || 'Login'}
-            </button>
-          </p>
-        </motion.div>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-      {/* Profile Sidebar */}
-      <div className="lg:col-span-1 space-y-6">
-        <div className="bg-white p-8 rounded-3xl shadow-sm border border-gray-100 text-center relative overflow-hidden">
-          {!isEditing && (
-            <button 
-              onClick={() => setIsEditing(true)}
-              className="absolute top-4 right-4 p-2 text-gray-400 hover:text-primary transition-colors"
-              title={t('edit_profile') || 'Edit Profile'}
-            >
-              <Edit2 size={20} />
-            </button>
-          )}
+    <div className="min-h-screen flex items-center justify-center p-4">
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="bg-white p-8 rounded-3xl shadow-lg border border-gray-100 w-full max-w-md"
+      >
+        <h1 className="text-2xl font-black text-gray-900 mb-2 tracking-tight uppercase">
+          {isLogin ? 'Connexion' : 'Inscription'}
+        </h1>
+        <p className="text-gray-500 mb-6 text-sm">
+          {isLogin ? 'Accédez à votre compte Jonas Loto' : 'Créez votre compte gratuitement'}
+        </p>
 
-          <div className="relative inline-block mb-4">
-            <div className="w-24 h-24 bg-primary/10 text-primary rounded-3xl flex items-center justify-center mx-auto border border-primary/20">
-              {user.user_metadata?.avatar_url ? (
-                <img src={user.user_metadata.avatar_url} alt="Avatar" className="w-full h-full rounded-3xl object-cover" />
-              ) : (
-                <UserIcon size={40} />
-              )}
-            </div>
-            <div className="absolute -bottom-2 -right-2 bg-secondary border-4 border-white w-8 h-8 rounded-full flex items-center justify-center shadow-sm">
-              <Star size={14} className="text-primary" />
-            </div>
+        {error && (
+          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl">
+            <p className="text-red-600 text-sm font-bold">{error}</p>
           </div>
+        )}
 
-          {userData?.role && (
-            <div className="mb-4">
-              <span className={`px-4 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border ${
-                userData.role === 'admin' ? 'bg-purple-50 text-purple-600 border-purple-100' :
-                userData.role === 'supervisor' ? 'bg-blue-50 text-blue-600 border-blue-100' :
-                userData.role === 'agent' ? 'bg-primary/5 text-primary border-primary/10' :
-                'bg-gray-50 text-gray-500 border-gray-100'
-              }`}>
-                {t(`role_${userData.role}`) || userData.role}
-              </span>
-            </div>
-          )}
-
-          {isEditing ? (
-            <form onSubmit={handleUpdateProfile} className="space-y-4 text-left">
+        <form onSubmit={handleSubmit} className="space-y-4 mb-6">
+          {!isLogin && (
+            <>
               <div>
-                <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">{t('name') || 'Name'}</label>
-                <input 
-                  type="text" 
-                  value={fullName}
-                  onChange={(e) => setFullName(e.target.value)}
-                  className="w-full p-2 bg-gray-50 border border-gray-100 rounded-lg focus:ring-2 focus:ring-primary focus:outline-none text-sm"
-                />
-              </div>
-              <div>
-                <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">{t('phone') || 'Phone'}</label>
-                <input 
-                  type="tel" 
-                  value={phoneNumber}
-                  onChange={(e) => setPhoneNumber(e.target.value)}
-                  className="w-full p-2 bg-gray-50 border border-gray-100 rounded-lg focus:ring-2 focus:ring-primary focus:outline-none text-sm"
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">{t('id_type') || 'ID Type'}</label>
-                  <select 
-                    value={idType}
-                    onChange={(e) => setIdType(e.target.value)}
-                    className="w-full p-2 bg-gray-50 border border-gray-100 rounded-lg focus:ring-2 focus:ring-primary focus:outline-none text-sm"
-                  >
-                    <option value="CIN">CIN</option>
-                    <option value="NIF">NIF</option>
-                    <option value="Passport">Passport</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">{t('id_number') || 'ID Number'}</label>
-                  <input 
-                    type="text" 
-                    value={idNumber}
-                    onChange={(e) => setIdNumber(e.target.value)}
-                    className="w-full p-2 bg-gray-50 border border-gray-100 rounded-lg focus:ring-2 focus:ring-primary focus:outline-none text-sm"
+                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-1 block mb-2">
+                  Nom Complet
+                </label>
+                <div className="relative">
+                  <User size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                  <input
+                    type="text"
+                    value={displayName}
+                    onChange={(e) => setDisplayName(e.target.value)}
+                    className="w-full pl-10 px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-primary focus:outline-none font-medium"
+                    placeholder="Jean Pierre"
+                    required
                   />
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-2">
-                <button 
-                  type="submit"
-                  disabled={loading}
-                  className="bg-primary text-white py-2 rounded-lg font-bold text-sm flex items-center justify-center gap-2 uppercase tracking-widest"
-                >
-                  <Save size={16} /> {t('save_changes') || 'Save'}
-                </button>
-                <button 
-                  type="button"
-                  onClick={() => setIsEditing(false)}
-                  className="bg-gray-100 text-gray-600 py-2 rounded-lg font-bold text-sm flex items-center justify-center gap-2"
-                >
-                  <X size={16} /> {t('cancel') || 'Cancel'}
-                </button>
+
+              <div>
+                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-1 block mb-2">
+                  Téléphone
+                </label>
+                <input
+                  type="tel"
+                  value={phoneNumber}
+                  onChange={(e) => setPhoneNumber(e.target.value)}
+                  className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-primary focus:outline-none font-medium"
+                  placeholder="+509 2812-3456"
+                />
               </div>
-            </form>
-          ) : (
-            <>
-              <h2 className="text-2xl font-black text-gray-900 tracking-tight uppercase italic">{userData?.displayName || user.user_metadata?.full_name || 'Joueur'}</h2>
-              <p className="text-gray-400 text-sm mb-2">{user.email}</p>
-              <p className="text-primary font-black text-xs uppercase tracking-widest mb-2">{userData?.phoneNumber || "Pas de téléphone"}</p>
-              <div className="flex justify-center gap-2 mb-2">
-                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Rôle:</span>
-                <span className="text-[10px] font-black text-primary uppercase tracking-widest">{t(`role_${userData?.role || 'client'}`) || userData?.role || 'client'}</span>
-              </div>
-              {userData?.idNumber && (
-                <p className="text-gray-500 text-[10px] font-bold uppercase tracking-widest mb-6">
-                  {userData.idType}: {userData.idNumber}
-                </p>
-              )}
-              {(!userData?.dateOfBirth || !userData?.idNumber) && (
-                <div className="bg-accent/5 text-accent p-3 rounded-xl text-[10px] font-black uppercase tracking-widest mb-6 flex items-center gap-2 border border-accent/10">
-                  <AlertCircle size={14} />
-                  Profil incomplet (Vérification d'âge requise)
-                </div>
-              )}
             </>
           )}
-          
-          <div className="grid grid-cols-2 gap-4 my-8">
-            <div className="bg-secondary/10 p-4 rounded-2xl border border-secondary/20">
-              <div className="text-[10px] text-secondary-dark font-black uppercase tracking-widest mb-1">Points</div>
-              <div className="text-xl font-black text-primary">{userData?.loyaltyPoints || 0}</div>
-            </div>
-            <div className="bg-primary/5 p-4 rounded-2xl border border-primary/10">
-              <div className="text-[10px] text-primary/40 font-black uppercase tracking-widest mb-1">Rang</div>
-              <div className="text-xl font-black text-primary">Bronze</div>
+
+          <div>
+            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-1 block mb-2">
+              Email
+            </label>
+            <div className="relative">
+              <Mail size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="w-full pl-10 px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-primary focus:outline-none font-medium"
+                placeholder="vous@exemple.com"
+                required
+              />
             </div>
           </div>
 
-          <button 
-            onClick={() => supabase.auth.signOut()}
-            className="w-full flex items-center justify-center gap-2 text-accent font-black text-[10px] uppercase tracking-widest hover:bg-accent/5 py-3 rounded-xl transition-colors mb-4 border border-accent/10"
+          <div>
+            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-1 block mb-2">
+              Mot de passe
+            </label>
+            <div className="relative">
+              <Lock size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+              <input
+                type={showPassword ? 'text' : 'password'}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="w-full pl-10 pr-10 px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-primary focus:outline-none font-medium"
+                placeholder="••••••••"
+                required
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+              >
+                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
+            </div>
+          </div>
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full bg-primary text-white py-3 rounded-xl font-bold hover:bg-primary-dark transition-colors shadow-lg shadow-primary/20 disabled:opacity-50 flex items-center justify-center gap-2 uppercase tracking-wider"
           >
-            <LogOut size={18} /> {t('logout') || 'Logout'}
+            {loading && <Loader size={18} className="animate-spin" />}
+            {isLogin ? 'Connexion' : 'S\'inscrire'}
           </button>
+        </form>
 
-          <div className="pt-6 border-t border-gray-100">
-            <h4 className="text-[10px] font-black text-accent uppercase tracking-widest mb-4 text-left">{t('danger_zone') || 'Danger Zone'}</h4>
-            <div className="space-y-2">
-              <button 
-                onClick={handleSuspendSelf}
-                className="w-full flex items-center justify-center gap-2 text-primary font-black text-[10px] uppercase tracking-widest hover:bg-primary/5 py-2 rounded-lg transition-colors border border-primary/10"
-              >
-                <AlertCircle size={14} /> {t('suspend_my_account') || 'Suspend Account'}
-              </button>
-              <button 
-                onClick={handleDeleteSelf}
-                className="w-full flex items-center justify-center gap-2 text-accent font-black text-[10px] uppercase tracking-widest hover:bg-accent/5 py-2 rounded-lg transition-colors border border-accent/10"
-              >
-                <X size={14} /> {t('delete_my_account') || 'Delete Account'}
-              </button>
-            </div>
+        <div className="relative mb-6">
+          <div className="absolute inset-0 flex items-center">
+            <div className="w-full border-t border-gray-100"></div>
+          </div>
+          <div className="relative flex justify-center text-sm">
+            <span className="px-2 bg-white text-gray-500">ou</span>
           </div>
         </div>
 
-        {/* Wallet Section */}
-        <div className="bg-white p-8 rounded-3xl shadow-sm border border-gray-100">
-          <div className="flex items-center gap-2 mb-6">
-            <Wallet className="text-primary" />
-            <h3 className="text-xl font-black text-gray-900 tracking-tight uppercase italic">{t('wallet') || 'Wallet'}</h3>
-          </div>
-          
-          <div className="bg-primary text-white p-6 rounded-2xl mb-6 border-b-4 border-secondary shadow-lg">
-            <div className="text-[10px] text-white/60 font-black uppercase tracking-widest mb-1">{t('balance') || 'Balance'}</div>
-            <div className="text-3xl font-black text-secondary">{userData?.balance?.toLocaleString() || 0} HTG</div>
-          </div>
+        <button className="w-full bg-white border border-gray-200 text-gray-900 py-3 rounded-xl font-bold hover:bg-gray-50 transition-colors flex items-center justify-center gap-2">
+          <svg className="w-5 h-5" viewBox="0 0 24 24">
+            <path fill="currentColor" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+            <path fill="currentColor" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+            <path fill="currentColor" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+            <path fill="currentColor" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+          </svg>
+          Se connecter avec Google
+        </button>
 
-          <div className="space-y-4">
-            <div className="flex gap-2">
-              {[100, 500, 1000].map(amt => (
-                <button 
-                  key={amt}
-                  onClick={() => setTopUpAmount(amt)}
-                  className={`flex-1 py-2 rounded-xl border-2 font-black text-[10px] uppercase tracking-widest transition-all ${
-                    topUpAmount === amt ? 'border-primary bg-primary/5 text-primary' : 'border-gray-100 text-gray-300'
-                  }`}
-                >
-                  {amt}
-                </button>
-              ))}
-            </div>
-            
-            <select 
-              value={topUpMethod}
-              onChange={(e) => setTopUpMethod(e.target.value)}
-              className="w-full p-3 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-primary focus:outline-none font-bold text-xs uppercase tracking-widest"
-            >
-              <option value="MonCash">MonCash (Digicel)</option>
-              <option value="NatCash">NatCash (Natcom)</option>
-              <option value="Lajan Cash">Lajan Cash</option>
-            </select>
-
-            <button 
-              onClick={handleTopUp}
-              disabled={loading}
-              className="w-full bg-primary text-white py-3 rounded-xl font-black uppercase tracking-widest hover:bg-primary-dark transition-all flex items-center justify-center gap-2 disabled:opacity-50 shadow-lg shadow-primary/20"
-            >
-              {loading ? <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div> : <ArrowUpCircle size={18} />}
-              {t('top_up') || 'Top Up'}
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Main Content Area */}
-      <div className="lg:col-span-2 space-y-8">
-        <section>
-          <div className="flex items-center gap-2 mb-6">
-            <History className="text-primary" />
-            <h2 className="text-2xl font-black text-gray-900 tracking-tight uppercase italic">{t('history') || 'History'}</h2>
-          </div>
-
-          {tickets.length === 0 ? (
-            <div className="bg-white p-12 rounded-3xl text-center border border-dashed border-gray-200">
-              <Ticket size={48} className="mx-auto text-gray-200 mb-4" />
-              <h3 className="text-xl font-black text-gray-900 uppercase italic">Aucun billet acheté</h3>
-              <p className="text-gray-400 text-sm mb-6">Tentez votre chance aujourd'hui !</p>
-              <Link to="/buy" className="bg-primary text-white px-8 py-3 rounded-full font-black uppercase tracking-widest hover:bg-primary-dark transition-all inline-block shadow-lg shadow-primary/20">
-                Acheter mon premier billet
-              </Link>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {tickets.map((ticket) => (
-                <div key={ticket.id} className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 flex flex-col md:flex-row md:items-center justify-between gap-4 hover:shadow-md transition-all">
-                  <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 bg-primary/5 rounded-2xl flex items-center justify-center text-primary border border-primary/10">
-                      <Ticket size={24} />
-                    </div>
-                    <div>
-                      <div className="text-lg font-black text-gray-900 uppercase italic">{ticket.borlette}</div>
-                      <div className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">
-                        {ticket.createdAt ? format(parseISO(ticket.createdAt), 'PPP', { locale: getDateLocale() }) : ''}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="flex flex-col gap-2 flex-grow max-w-md">
-                    {Object.entries(ticket.entries || {}).map(([loto, entry]: [string, any]) => (
-                      <div key={loto} className="flex flex-wrap gap-2 items-center bg-gray-50 p-2 rounded-xl border border-gray-100">
-                        <span className="text-[10px] font-black text-primary uppercase w-full">{loto}</span>
-                        {entry.numbers.map((num: string, i: number) => (
-                          <div key={i} className="flex items-center gap-1">
-                            <span className="bg-primary text-white w-6 h-6 rounded-full flex items-center justify-center font-black text-[10px] border border-secondary/20 shadow-sm">{num}</span>
-                            <span className="text-[10px] font-bold text-gray-400">{entry.amounts[i]} HTG</span>
-                          </div>
-                        ))}
-                      </div>
-                    ))}
-                  </div>
-
-                  <div className="flex items-center gap-6">
-                    <div className="text-right">
-                      <div className="text-sm font-black text-gray-900">{ticket.amount} HTG</div>
-                      <div className={`text-[10px] font-black uppercase tracking-widest ${
-                        ticket.status === 'won' ? 'text-green-500' : 
-                        ticket.status === 'lost' ? 'text-accent' : 'text-primary'
-                      }`}>
-                        {ticket.status}
-                      </div>
-                    </div>
-                    <ChevronRight className="text-gray-300" />
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </section>
-      </div>
+        <p className="text-center text-gray-500 text-sm mt-6">
+          {isLogin ? 'Pas encore de compte? ' : 'Vous avez déjà un compte? '}
+          <button
+            type="button"
+            onClick={() => {
+              setIsLogin(!isLogin);
+              setError('');
+            }}
+            className="text-primary font-bold hover:underline"
+          >
+            {isLogin ? 'S\'inscrire' : 'Se connecter'}
+          </button>
+        </p>
+      </motion.div>
     </div>
   );
 }

@@ -4,14 +4,8 @@ import { supabase } from '../lib/supabase';
 import { handleSupabaseError, OperationType } from '../lib/supabaseUtils';
 import { motion } from 'motion/react';
 import { 
-  Users, 
-  Ticket, 
-  MapPin, 
-  ShieldCheck, 
-  Activity,
-  AlertTriangle,
-  Search,
-  Filter
+  Users, Ticket, MapPin, ShieldCheck, Activity,
+  AlertTriangle, Search, Filter
 } from 'lucide-react';
 
 export default function Supervisor() {
@@ -24,29 +18,21 @@ export default function Supervisor() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const { data: agentsData, error: agentsError } = await supabase
+        const { data: agentsData } = await supabase
           .from('users')
           .select('*')
           .eq('role', 'agent')
           .limit(10);
         
-        if (agentsError) {
-          handleSupabaseError(agentsError, OperationType.GET, 'users');
-        } else {
-          setAgents(agentsData || []);
-        }
+        if (agentsData) setAgents(agentsData || []);
 
-        const { data: ticketsData, error: ticketsError } = await supabase
+        const { data: ticketsData } = await supabase
           .from('tickets')
           .select('*')
           .order('createdAt', { ascending: false })
           .limit(10);
         
-        if (ticketsError) {
-          handleSupabaseError(ticketsError, OperationType.GET, 'tickets');
-        } else {
-          setRecentTickets(ticketsData || []);
-        }
+        if (ticketsData) setRecentTickets(ticketsData || []);
       } catch (err) {
         console.error('Error fetching supervisor data:', err);
       } finally {
@@ -55,6 +41,26 @@ export default function Supervisor() {
     };
 
     fetchData();
+
+    // Real-time listeners
+    const agentsChannel = supabase
+      .channel('supervisor-agents')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'users' }, () => {
+        fetchData();
+      })
+      .subscribe();
+
+    const ticketsChannel = supabase
+      .channel('supervisor-tickets')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'tickets' }, () => {
+        fetchData();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(agentsChannel);
+      supabase.removeChannel(ticketsChannel);
+    };
   }, []);
 
   return (
@@ -85,7 +91,6 @@ export default function Supervisor() {
         </div>
       </div>
 
-      {/* Real-time Status Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 flex items-center gap-4">
           <div className="w-12 h-12 bg-green-100 text-green-600 rounded-2xl flex items-center justify-center">
@@ -191,23 +196,13 @@ export default function Supervisor() {
                       <Ticket size={20} />
                     </div>
                     <div>
-                      <div className="text-sm font-bold text-gray-900">{ticket.drawType || ticket.lottery + ' - ' + ticket.gameType}</div>
-                      <div className="text-[10px] text-gray-400">ID: {ticket.id.substring(0, 8)}... • Agent: {ticket.agentId?.substring(0, 6) || 'Web'}</div>
+                      <div className="text-sm font-bold text-gray-900">{ticket.borlette || 'Tirage'}</div>
+                      <div className="text-[10px] text-gray-400">ID: {ticket.id.substring(0, 8)}...</div>
                     </div>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    {ticket.numbers?.map((n: string, i: number) => (
-                      <div key={i} className="flex flex-col items-center">
-                        <span className="w-6 h-6 rounded-full bg-gray-100 text-gray-600 flex items-center justify-center font-bold text-[10px]">{n}</span>
-                        {ticket.individualAmounts?.[i] && (
-                          <span className="text-[8px] font-bold text-gray-400">{ticket.individualAmounts[i]}</span>
-                        )}
-                      </div>
-                    ))}
                   </div>
                   <div className="text-right">
                     <div className="text-sm font-black text-gray-900">{ticket.amount} HTG</div>
-                    <div className="text-[10px] text-gray-400 uppercase font-bold">{ticket.type}</div>
+                    <div className="text-[10px] text-gray-400 uppercase font-bold">En attente</div>
                   </div>
                 </div>
               ))

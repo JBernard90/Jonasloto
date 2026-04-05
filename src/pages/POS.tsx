@@ -2,21 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { supabase } from '../lib/supabase';
 import { handleSupabaseError, OperationType } from '../lib/supabaseUtils';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion } from 'motion/react';
 import { format, formatDistanceToNow } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { 
-  Monitor, 
-  Ticket, 
-  DollarSign, 
-  Printer, 
-  Search, 
-  CheckCircle2, 
-  History,
-  UserPlus,
-  Zap,
-  ChevronLeft,
-  Dices
+  Monitor, Ticket, DollarSign, Printer, Search, CheckCircle2, History,
+  UserPlus, Zap, ChevronLeft, Dices
 } from 'lucide-react';
 import { LOTTERY_CONFIG, LOTO_DIGITS } from '../constants/lottery';
 
@@ -35,6 +26,19 @@ export default function POS() {
 
   useEffect(() => {
     fetchRecentSales();
+
+    // Real-time listener for new tickets
+    const channel = supabase
+      .channel('pos-tickets')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'tickets' }, (payload) => {
+        setRecentSales(prev => [payload.new, ...prev].slice(0, 5));
+        setSessionTotal(prev => prev + (payload.new.amount || 0));
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   const fetchRecentSales = async () => {
@@ -174,7 +178,7 @@ export default function POS() {
           </div>
           <div>
             <h1 className="text-4xl font-black text-gray-900 tracking-tight">Point de Vente</h1>
-            <p className="text-gray-500">Interface de vente de billets</p>
+            <p className="text-gray-500">Interface de vente de billets (Mise à jour en temps réel)</p>
           </div>
         </div>
 
@@ -185,7 +189,6 @@ export default function POS() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Main Sale Form */}
         <div className="lg:col-span-2">
           <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-8">
             {step === 1 ? (
@@ -289,7 +292,6 @@ export default function POS() {
           </div>
         </div>
 
-        {/* Recent Sales Sidebar */}
         <div className="lg:col-span-1 space-y-6">
           <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-6">
             <div className="flex items-center gap-2 mb-6">

@@ -60,7 +60,6 @@ export default function Contact() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {/* Contact Form */}
         <div className="bg-white p-8 md:p-10 rounded-3xl shadow-sm border border-gray-100">
           <h2 className="text-2xl font-black text-gray-900 mb-6 tracking-tight">Envoyez-nous un message</h2>
           <form className="space-y-4">
@@ -93,7 +92,6 @@ export default function Contact() {
           </form>
         </div>
 
-        {/* Info & Social */}
         <div className="space-y-8">
           <div className="bg-gray-900 text-white p-10 rounded-3xl relative overflow-hidden">
             <div className="relative z-10">
@@ -134,7 +132,6 @@ export default function Contact() {
                 </div>
               </div>
             </div>
-            {/* Abstract Background */}
             <div className="absolute top-0 right-0 -mr-20 -mt-20 w-64 h-64 bg-primary rounded-full mix-blend-multiply filter blur-3xl opacity-10"></div>
           </div>
 

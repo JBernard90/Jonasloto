@@ -41,6 +41,18 @@ export default function Home() {
     };
 
     fetchRecentDraws();
+
+    // Real-time listener for new draws
+    const channel = supabase
+      .channel('draws-latest')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'draws' }, (payload) => {
+        fetchRecentDraws();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   const getDateLocale = () => {
@@ -79,7 +91,6 @@ export default function Home() {
           </div>
         </div>
         
-        {/* Abstract Background Elements */}
         <div className="absolute top-0 right-0 -mr-20 -mt-20 w-96 h-96 bg-secondary rounded-full mix-blend-overlay filter blur-3xl opacity-10 animate-pulse"></div>
         <div className="absolute bottom-0 right-0 -mr-20 -mb-20 w-80 h-80 bg-accent rounded-full mix-blend-overlay filter blur-3xl opacity-10 animate-pulse delay-700"></div>
       </section>
@@ -89,7 +100,7 @@ export default function Home() {
         <div className="flex justify-between items-end mb-8">
           <div>
             <h2 className="text-3xl font-black text-gray-900 tracking-tight">{t('recent_results') || 'Recent Results'}</h2>
-            <p className="text-gray-500">Derniers tirages officiels</p>
+            <p className="text-gray-500">Derniers tirages officiels (Mise à jour en temps réel)</p>
           </div>
           <Link to="/results" className="text-primary font-black flex items-center gap-1 hover:underline uppercase text-sm tracking-wider">
             Voir tout <ArrowRight size={16} />

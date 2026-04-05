@@ -4,22 +4,8 @@ import { supabase } from '../lib/supabase';
 import { handleSupabaseError, OperationType } from '../lib/supabaseUtils';
 import { motion } from 'motion/react';
 import { 
-  BarChart3, 
-  Users, 
-  Trophy, 
-  DollarSign, 
-  Plus, 
-  Search, 
-  CheckCircle2, 
-  AlertCircle,
-  TrendingUp,
-  ArrowUpRight,
-  ArrowDownRight,
-  Settings,
-  ShieldCheck,
-  UserX,
-  Trash2,
-  CheckCircle
+  BarChart3, Users, Trophy, DollarSign, Plus, Search, CheckCircle2, AlertCircle,
+  TrendingUp, ArrowUpRight, ArrowDownRight, Settings, ShieldCheck, UserX, Trash2, CheckCircle
 } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { fr } from 'date-fns/locale';
@@ -29,14 +15,7 @@ import Logo from '../components/Logo';
 export default function Admin() {
   const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState('dashboard');
-  const [stats, setStats] = useState({
-    totalSales: 1250000,
-    activeUsers: 4500,
-    payouts: 850000,
-    growth: 12.5
-  });
-
-  // Draw Form State
+  const [stats, setStats] = useState({ totalSales: 1250000, activeUsers: 4500, payouts: 850000, growth: 12.5 });
   const [drawType, setDrawType] = useState('New York');
   const [drawDate, setDrawDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [drawTime, setDrawTime] = useState(format(new Date(), 'HH:mm'));
@@ -45,37 +24,46 @@ export default function Admin() {
   const [users, setUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
 
+  const drawTypes = Object.keys(LOTTERY_CONFIG);
+
   useEffect(() => {
     if (activeTab !== 'users') return;
     
     const fetchUsers = async () => {
       try {
-        const { data, error } = await supabase
+        const { data } = await supabase
           .from('users')
           .select('*')
           .order('createdAt', { ascending: false })
           .limit(50);
         
-        if (error) {
-          handleSupabaseError(error, OperationType.LIST, 'users');
-        } else {
-          setUsers(data || []);
-        }
+        if (data) setUsers(data || []);
       } catch (err) {
         console.error('Error fetching users:', err);
       }
     };
 
     fetchUsers();
+
+    // Real-time listener for user changes
+    const channel = supabase
+      .channel('admin-users')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'users' }, () => {
+        fetchUsers();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [activeTab]);
 
   const handleUpdateRole = async (userId: string, newRole: string) => {
     try {
-      const { error } = await supabase
+      await supabase
         .from('users')
         .update({ role: newRole })
         .eq('uid', userId);
-      if (error) throw error;
     } catch (error) {
       handleSupabaseError(error, OperationType.UPDATE, `users/${userId}`);
     }
@@ -83,11 +71,10 @@ export default function Admin() {
 
   const handleUpdateStatus = async (userId: string, newStatus: string) => {
     try {
-      const { error } = await supabase
+      await supabase
         .from('users')
         .update({ status: newStatus })
         .eq('uid', userId);
-      if (error) throw error;
     } catch (error) {
       handleSupabaseError(error, OperationType.UPDATE, `users/${userId}`);
     }
@@ -96,24 +83,18 @@ export default function Admin() {
   const handleDeleteUser = async (userId: string) => {
     if (!window.confirm(t('confirm_delete_user') || 'Are you sure?')) return;
     try {
-      const { error } = await supabase
-        .from('users')
-        .delete()
-        .eq('uid', userId);
-      if (error) throw error;
+      await supabase.from('users').delete().eq('uid', userId);
     } catch (error) {
       handleSupabaseError(error, OperationType.DELETE, `users/${userId}`);
     }
   };
-
-  const drawTypes = Object.keys(LOTTERY_CONFIG);
 
   const handleAddDraw = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     try {
       const dateTime = new Date(`${drawDate}T${drawTime}`);
-      const { error } = await supabase.from('draws').insert({
+      await supabase.from('draws').insert({
         type: drawType,
         date: dateTime.toISOString(),
         numbers: drawNumbers.filter(n => n !== ''),
@@ -121,7 +102,6 @@ export default function Admin() {
         status: 'completed',
         createdAt: new Date().toISOString()
       });
-      if (error) throw error;
       alert("Tirage ajouté avec succès !");
       setDrawNumbers(['', '', '']);
     } catch (error) {
@@ -159,56 +139,26 @@ export default function Admin() {
 
       {activeTab === 'dashboard' && (
         <div className="space-y-8">
-          {/* Stats Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100">
-              <div className="flex justify-between items-start mb-4">
-                <div className="w-12 h-12 bg-secondary/20 text-secondary-dark rounded-2xl flex items-center justify-center">
-                  <DollarSign size={24} />
+            {[
+              { label: 'Ventes Totales', value: stats.totalSales, icon: DollarSign, color: 'secondary' },
+              { label: 'Utilisateurs Actifs', value: stats.activeUsers, icon: Users, color: 'primary' },
+              { label: 'Paiements', value: stats.payouts, icon: TrendingUp, color: 'accent' },
+              { label: 'Croissance', value: `+${stats.growth}%`, icon: BarChart3, color: 'green' }
+            ].map((stat, idx) => (
+              <div key={idx} className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100">
+                <div className="flex justify-between items-start mb-4">
+                  <div className={`w-12 h-12 bg-${stat.color}/10 text-${stat.color} rounded-2xl flex items-center justify-center`}>
+                    <stat.icon size={24} />
+                  </div>
+                  <div className="flex items-center gap-1 text-green-500 text-xs font-bold">
+                    <ArrowUpRight size={14} /> 5.3%
+                  </div>
                 </div>
-                <div className="flex items-center gap-1 text-green-500 text-xs font-bold">
-                  <ArrowUpRight size={14} /> {stats.growth}%
-                </div>
+                <div className="text-xs text-gray-400 font-bold uppercase tracking-widest mb-1">{stat.label}</div>
+                <div className="text-2xl font-black text-gray-900">{typeof stat.value === 'number' ? stat.value.toLocaleString() : stat.value}</div>
               </div>
-              <div className="text-xs text-gray-400 font-bold uppercase tracking-widest mb-1">Ventes Totales</div>
-              <div className="text-2xl font-black text-gray-900">{stats.totalSales.toLocaleString()} HTG</div>
-            </div>
-            <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100">
-              <div className="flex justify-between items-start mb-4">
-                <div className="w-12 h-12 bg-primary/10 text-primary rounded-2xl flex items-center justify-center">
-                  <Users size={24} />
-                </div>
-                <div className="flex items-center gap-1 text-green-500 text-xs font-bold">
-                  <ArrowUpRight size={14} /> 8.2%
-                </div>
-              </div>
-              <div className="text-xs text-gray-400 font-bold uppercase tracking-widest mb-1">Utilisateurs Actifs</div>
-              <div className="text-2xl font-black text-gray-900">{stats.activeUsers.toLocaleString()}</div>
-            </div>
-            <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100">
-              <div className="flex justify-between items-start mb-4">
-                <div className="w-12 h-12 bg-accent/10 text-accent rounded-2xl flex items-center justify-center">
-                  <TrendingUp size={24} />
-                </div>
-                <div className="flex items-center gap-1 text-green-500 text-xs font-bold">
-                  <ArrowUpRight size={14} /> 5.3%
-                </div>
-              </div>
-              <div className="text-xs text-gray-400 font-bold uppercase tracking-widest mb-1">Paiements</div>
-              <div className="text-2xl font-black text-gray-900">{stats.payouts.toLocaleString()} HTG</div>
-            </div>
-            <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100">
-              <div className="flex justify-between items-start mb-4">
-                <div className="w-12 h-12 bg-green-100 text-green-600 rounded-2xl flex items-center justify-center">
-                  <BarChart3 size={24} />
-                </div>
-                <div className="flex items-center gap-1 text-green-500 text-xs font-bold">
-                  <ArrowDownRight size={14} /> 2.1%
-                </div>
-              </div>
-              <div className="text-xs text-gray-400 font-bold uppercase tracking-widest mb-1">Croissance</div>
-              <div className="text-2xl font-black text-gray-900">+{stats.growth}%</div>
-            </div>
+            ))}
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -216,65 +166,50 @@ export default function Admin() {
               <div className="bg-white p-8 rounded-3xl shadow-sm border border-gray-100">
                 <h3 className="text-lg font-black text-gray-900 mb-6">Ajouter un Tirage</h3>
                 <form onSubmit={handleAddDraw} className="space-y-4">
-                  <div>
-                    <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">Type de Tirage</label>
-                    <select 
-                      value={drawType}
-                      onChange={(e) => setDrawType(e.target.value)}
-                      className="w-full p-3 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-primary focus:outline-none font-bold"
-                    >
-                      {drawTypes.map(type => (
-                        <option key={type} value={type}>{type}</option>
-                      ))}
-                    </select>
+                  <select 
+                    value={drawType}
+                    onChange={(e) => setDrawType(e.target.value)}
+                    className="w-full p-3 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-primary focus:outline-none font-bold"
+                  >
+                    {drawTypes.map(type => (
+                      <option key={type} value={type}>{type}</option>
+                    ))}
+                  </select>
+                  <input 
+                    type="date" 
+                    value={drawDate}
+                    onChange={(e) => setDrawDate(e.target.value)}
+                    className="w-full p-3 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-primary focus:outline-none font-bold"
+                  />
+                  <input 
+                    type="time" 
+                    value={drawTime}
+                    onChange={(e) => setDrawTime(e.target.value)}
+                    className="w-full p-3 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-primary focus:outline-none font-bold"
+                  />
+                  <div className="grid grid-cols-3 gap-2">
+                    {drawNumbers.map((num, i) => (
+                      <input 
+                        key={i}
+                        type="text"
+                        maxLength={2}
+                        value={num}
+                        onChange={(e) => {
+                          const newNums = [...drawNumbers];
+                          newNums[i] = e.target.value.replace(/\D/g, '');
+                          setDrawNumbers(newNums);
+                        }}
+                        className="w-full p-3 bg-gray-50 border border-gray-100 rounded-xl text-center font-black focus:ring-2 focus:ring-primary focus:outline-none"
+                        placeholder="00"
+                      />
+                    ))}
                   </div>
-                  <div>
-                    <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">Date</label>
-                    <input 
-                      type="date" 
-                      value={drawDate}
-                      onChange={(e) => setDrawDate(e.target.value)}
-                      className="w-full p-3 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-primary focus:outline-none font-bold"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">Heure</label>
-                    <input 
-                      type="time" 
-                      value={drawTime}
-                      onChange={(e) => setDrawTime(e.target.value)}
-                      className="w-full p-3 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-primary focus:outline-none font-bold"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">Numéros Gagnants</label>
-                    <div className="grid grid-cols-3 gap-2">
-                      {drawNumbers.map((num, i) => (
-                        <input 
-                          key={i}
-                          type="text"
-                          maxLength={2}
-                          value={num}
-                          onChange={(e) => {
-                            const newNums = [...drawNumbers];
-                            newNums[i] = e.target.value.replace(/\D/g, '');
-                            setDrawNumbers(newNums);
-                          }}
-                          className="w-full p-3 bg-gray-50 border border-gray-100 rounded-xl text-center font-black focus:ring-2 focus:ring-primary focus:outline-none"
-                          placeholder="00"
-                        />
-                      ))}
-                    </div>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">Jackpot (HTG)</label>
-                    <input 
-                      type="number" 
-                      value={drawJackpot}
-                      onChange={(e) => setDrawJackpot(Number(e.target.value))}
-                      className="w-full p-3 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-primary focus:outline-none font-black"
-                    />
-                  </div>
+                  <input 
+                    type="number" 
+                    value={drawJackpot}
+                    onChange={(e) => setDrawJackpot(Number(e.target.value))}
+                    className="w-full p-3 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-primary focus:outline-none font-black"
+                  />
                   <button 
                     type="submit"
                     disabled={loading}
@@ -293,7 +228,7 @@ export default function Admin() {
                   <button className="text-primary font-bold text-xs hover:underline">Voir tout</button>
                 </div>
                 <div className="divide-y divide-gray-50">
-                  {[1, 2, 3, 4, 5].map(i => (
+                  {[1, 2, 3].map(i => (
                     <div key={i} className="p-6 flex items-center justify-between hover:bg-gray-50 transition-colors">
                       <div className="flex items-center gap-4">
                         <div className="w-10 h-10 bg-primary/5 text-primary rounded-xl flex items-center justify-center font-bold">NY</div>
@@ -327,16 +262,13 @@ export default function Admin() {
               <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
               <input 
                 type="text" 
-                placeholder="Rechercher un utilisateur (nom, email, téléphone)..."
+                placeholder="Rechercher un utilisateur..."
                 className="w-full pl-12 pr-4 py-2 bg-white border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-primary focus:outline-none transition-all"
               />
             </div>
             <div className="flex gap-2">
               <button className="bg-primary text-white px-6 py-2 rounded-xl text-sm font-bold hover:bg-primary-dark transition-colors flex items-center gap-2">
                 <Plus size={18} /> Ajouter un Agent
-              </button>
-              <button className="bg-gray-900 text-white px-6 py-2 rounded-xl text-sm font-bold hover:bg-gray-800 transition-colors flex items-center gap-2">
-                <ShieldCheck size={18} /> Ajouter un Superviseur
               </button>
             </div>
           </div>
@@ -346,7 +278,6 @@ export default function Admin() {
                 <th className="px-6 py-4">Utilisateur</th>
                 <th className="px-6 py-4">Rôle</th>
                 <th className="px-6 py-4">Statut</th>
-                <th className="px-6 py-4">Points</th>
                 <th className="px-6 py-4">Date Inscription</th>
                 <th className="px-6 py-4 text-right">Actions</th>
               </tr>
@@ -376,20 +307,19 @@ export default function Admin() {
                         'bg-gray-100 text-gray-500'
                       }`}
                     >
-                      <option value="client">{t('role_client') || 'Client'}</option>
-                      <option value="agent">{t('role_agent') || 'Agent'}</option>
-                      <option value="supervisor">{t('role_supervisor') || 'Supervisor'}</option>
-                      <option value="admin">{t('role_admin') || 'Admin'}</option>
+                      <option value="client">Client</option>
+                      <option value="agent">Agent</option>
+                      <option value="supervisor">Supervisor</option>
+                      <option value="admin">Admin</option>
                     </select>
                   </td>
                   <td className="px-6 py-4">
                     <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${
                       user.status === 'suspended' ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-600'
                     }`}>
-                      {t(`status_${user.status || 'active'}`) || (user.status || 'Active')}
+                      {user.status === 'suspended' ? 'Suspendu' : 'Actif'}
                     </span>
                   </td>
-                  <td className="px-6 py-4 text-sm font-bold text-gray-900">{user.loyaltyPoints?.toLocaleString() || 0}</td>
                   <td className="px-6 py-4 text-xs text-gray-400">
                     {user.createdAt ? format(parseISO(user.createdAt), 'dd MMM yyyy', { locale: fr }) : 'N/A'}
                   </td>
@@ -399,7 +329,6 @@ export default function Admin() {
                         <button 
                           onClick={() => handleUpdateStatus(user.id, 'active')}
                           className="text-green-500 hover:text-green-700 transition-colors p-2"
-                          title={t('activate') || 'Activate'}
                         >
                           <CheckCircle size={18} />
                         </button>
@@ -407,7 +336,6 @@ export default function Admin() {
                         <button 
                           onClick={() => handleUpdateStatus(user.id, 'suspended')}
                           className="text-accent hover:text-accent-dark transition-colors p-2"
-                          title={t('suspend') || 'Suspend'}
                         >
                           <UserX size={18} />
                         </button>
@@ -415,7 +343,6 @@ export default function Admin() {
                       <button 
                         onClick={() => handleDeleteUser(user.id)}
                         className="text-red-400 hover:text-red-600 transition-colors p-2"
-                        title={t('delete') || 'Delete'}
                       >
                         <Trash2 size={18} />
                       </button>
