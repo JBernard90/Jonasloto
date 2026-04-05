@@ -10,6 +10,7 @@ import Home from './pages/Home';
 import Results from './pages/Results';
 import BuyTicket from './pages/BuyTicket';
 import Profile from './pages/Profile';
+import OTP from './pages/OTP';
 import Admin from './pages/Admin';
 import POS from './pages/POS';
 import Supervisor from './pages/Supervisor';
@@ -26,8 +27,8 @@ export default function App() {
   const [envError, setEnvError] = useState(false);
 
   useEffect(() => {
-    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || (typeof process !== 'undefined' ? process.env.VITE_SUPABASE_URL : undefined);
-    const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || (typeof process !== 'undefined' ? process.env.VITE_SUPABASE_ANON_KEY : undefined);
+    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+    const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
     if (!supabaseUrl || !supabaseAnonKey) {
       setEnvError(true);
@@ -35,10 +36,8 @@ export default function App() {
       return;
     }
 
-    // Initialize auth state
     const initializeAuth = async () => {
       try {
-        // Get current session
         const { data: { session }, error } = await supabase.auth.getSession();
         
         if (error) {
@@ -61,7 +60,6 @@ export default function App() {
             if (userData) {
               let userRole = userData.role;
               
-              // Force admin role for the owner email if not already set
               if (supabaseUser.email === 'jeanbernardpierrelouis@gmail.com' && userRole !== 'admin') {
                 userRole = 'admin';
               }
@@ -69,7 +67,6 @@ export default function App() {
               setRole(userRole);
               setIsSuspended(userData.status === 'suspended');
             } else {
-              // If document doesn't exist yet (first login)
               if (supabaseUser.email === 'jeanbernardpierrelouis@gmail.com') {
                 setRole('admin');
               } else {
@@ -78,7 +75,6 @@ export default function App() {
             }
           } catch (dbError) {
             console.error('Database error:', dbError);
-            // Set default role if database query fails
             setRole(supabaseUser.email === 'jeanbernardpierrelouis@gmail.com' ? 'admin' : 'client');
           }
         } else {
@@ -94,7 +90,6 @@ export default function App() {
 
     initializeAuth();
 
-    // Simple auth state listener (without Realtime)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       const supabaseUser = session?.user || null;
       setUser(supabaseUser);
@@ -139,7 +134,7 @@ export default function App() {
           </div>
           <h1 className="text-2xl font-black text-gray-900 mb-2 italic uppercase tracking-tight">Configuration Requise</h1>
           <p className="text-gray-500 mb-6 leading-relaxed">
-            Les variables d'environnement Supabase sont manquantes. Veuillez les configurer dans le menu <strong>Settings</strong>.
+            Les variables d'environnement Supabase sont manquantes. Veuillez les configurer dans le menu Settings.
           </p>
           <div className="space-y-4 text-left bg-gray-50 p-4 rounded-xl border border-gray-100 text-sm font-mono">
             <div>VITE_SUPABASE_URL</div>
@@ -188,10 +183,10 @@ export default function App() {
               <Route path="/results" element={<Results />} />
               <Route path="/buy" element={<BuyTicket user={user} />} />
               <Route path="/profile" element={<Profile user={user} />} />
+              <Route path="/otp" element={<OTP />} />
               <Route path="/contact" element={<Contact />} />
               <Route path="/rules" element={<Rules />} />
               
-              {/* Protected Routes */}
               <Route 
                 path="/admin/*" 
                 element={role === 'admin' ? <Admin /> : <Navigate to="/" />} 
