@@ -58,16 +58,30 @@ export default function Layout({ children, user: initialUser, role: initialRole 
       }
     });
 
-    return () => subscription.unsubscribe();
+    return () => subscription?.unsubscribe();
   }, [initialUser]);
 
   const fetchUserData = async (uid: string) => {
     try {
-      const { data, error } = await supabase.from('users').select('*').eq('uid', uid).single();
-      if (error) throw error;
-      if (data) setUserData(data);
+      // FIX: Remove .single() - it causes freeze if row doesn't exist
+      const { data, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('uid', uid);
+
+      if (error) {
+        console.error('Jonas Loto Center: Error fetching user data in Layout:', error);
+        return;
+      }
+
+      // Get first result or null
+      if (data && data.length > 0) {
+        setUserData(data[0]);
+      } else {
+        setUserData(null);
+      }
     } catch (err) {
-      console.error('Jonas Loto Center: Error fetching user data in Layout:', err);
+      console.error('Jonas Loto Center: Unexpected error fetching user data:', err);
     }
   };
 
