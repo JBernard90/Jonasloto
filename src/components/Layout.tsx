@@ -39,12 +39,16 @@ export default function Layout({ children, user: initialUser, role: initialRole 
   }, [initialUser]);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (!initialUser) {
-        setUser(session?.user ?? null);
-        if (session?.user) fetchUserData(session.user.id);
-      }
-    });
+    supabase.auth.getSession()
+      .then(({ data: { session } }) => {
+        if (!initialUser) {
+          setUser(session?.user ?? null);
+          if (session?.user) fetchUserData(session.user.id);
+        }
+      })
+      .catch(err => {
+        console.error('Jonas Loto Center: Layout session error:', err);
+      });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (!initialUser) {
@@ -58,8 +62,13 @@ export default function Layout({ children, user: initialUser, role: initialRole 
   }, [initialUser]);
 
   const fetchUserData = async (uid: string) => {
-    const { data } = await supabase.from('users').select('*').eq('uid', uid).single();
-    if (data) setUserData(data);
+    try {
+      const { data, error } = await supabase.from('users').select('*').eq('uid', uid).single();
+      if (error) throw error;
+      if (data) setUserData(data);
+    } catch (err) {
+      console.error('Jonas Loto Center: Error fetching user data in Layout:', err);
+    }
   };
 
   useEffect(() => {

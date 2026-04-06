@@ -20,14 +20,20 @@ export default function Home() {
 
   useEffect(() => {
     const fetchDraws = async () => {
-      const { data, error } = await supabase
-        .from('draws')
-        .select('*')
-        .order('date', { ascending: false })
-        .limit(3);
-      
-      if (data) setRecentDraws(data);
-      setLoading(false);
+      try {
+        const { data, error } = await supabase
+          .from('draws')
+          .select('*')
+          .order('date', { ascending: false })
+          .limit(3);
+        
+        if (error) throw error;
+        if (data) setRecentDraws(data);
+      } catch (err) {
+        console.error('Jonas Loto Center: Error fetching draws in Home:', err);
+      } finally {
+        setLoading(false);
+      }
     };
 
     fetchDraws();
