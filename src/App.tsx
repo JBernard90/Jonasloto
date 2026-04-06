@@ -1,23 +1,26 @@
-import React, { Suspense, useEffect, useState } from 'react';
+import React, { Suspense, useEffect, useState, lazy } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { User } from '@supabase/supabase-js';
 import { UserX, Settings } from 'lucide-react';
 import { supabase } from './lib/supabase';
 import './lib/i18n';
 
-// Pages
-import Home from './pages/Home';
-import Results from './pages/Results';
-import BuyTicket from './pages/BuyTicket';
-import Profile from './pages/Profile';
-import OTP from './pages/OTP';
-import Admin from './pages/Admin';
-import POS from './pages/POS';
-import Supervisor from './pages/Supervisor';
-import Contact from './pages/Contact';
-import Rules from './pages/Rules';
+// Lazy load pages
+const Home = lazy(() => import('./pages/Home'));
+const Results = lazy(() => import('./pages/Results'));
+const BuyTicket = lazy(() => import('./pages/BuyTicket'));
+const Profile = lazy(() => import('./pages/Profile'));
+const OTP = lazy(() => import('./pages/OTP'));
+const Admin = lazy(() => import('./pages/Admin'));
+const POS = lazy(() => import('./pages/POS'));
+const Supervisor = lazy(() => import('./pages/Supervisor'));
+const Contact = lazy(() => import('./pages/Contact'));
+const Rules = lazy(() => import('./pages/Rules'));
+
 import Layout from './components/Layout';
 import ErrorBoundary from './components/ErrorBoundary';
+import Logo from './components/Logo';
+import { motion } from 'motion/react';
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -121,8 +124,26 @@ export default function App() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-screen bg-gray-50">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+      <div className="min-h-screen bg-primary flex flex-col items-center justify-center p-4 dark:bg-black">
+        <motion.div
+          initial={{ scale: 0.8, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={{ duration: 1.5, repeat: Infinity, repeatType: "reverse" }}
+          className="mb-8"
+        >
+          <Logo className="w-48 h-48 text-white" />
+        </motion.div>
+        <div className="w-48 h-1 bg-white/10 rounded-full overflow-hidden">
+          <motion.div 
+            className="h-full bg-secondary"
+            initial={{ width: "0%" }}
+            animate={{ width: "100%" }}
+            transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+          />
+        </div>
+        <p className="mt-4 text-white/50 font-black uppercase tracking-widest text-[10px] italic">
+          Chargement de Jonas Loto...
+        </p>
       </div>
     );
   }
@@ -151,7 +172,11 @@ export default function App() {
     <ErrorBoundary>
       <Router>
         <Layout user={user} role={role}>
-          <Suspense fallback={<div>Loading...</div>}>
+          <Suspense fallback={
+            <div className="min-h-[60vh] flex items-center justify-center">
+              <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin dark:border-secondary dark:border-t-transparent"></div>
+            </div>
+          }>
             <Routes>
               <Route path="/" element={<Home />} />
               <Route path="/results" element={<Results />} />
