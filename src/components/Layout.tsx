@@ -24,8 +24,12 @@ export default function Layout({ children, user: initialUser, role: initialRole 
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isDark, setIsDark] = useState(() => {
     if (typeof window !== 'undefined') {
-      return localStorage.getItem('theme') === 'dark' || 
-             (!localStorage.getItem('theme') && window.matchMedia('(prefers-color-scheme: dark)').matches);
+      try {
+        return localStorage.getItem('theme') === 'dark' || 
+               (!localStorage.getItem('theme') && window.matchMedia('(prefers-color-scheme: dark)').matches);
+      } catch (e) {
+        return false;
+      }
     }
     return false;
   });
@@ -34,39 +38,11 @@ export default function Layout({ children, user: initialUser, role: initialRole 
 
   useEffect(() => {
     setUser(initialUser);
-    if (initialUser) fetchUserData(initialUser.id).catch(err => console.error('Jonas Loto Center: Error in Layout initialUser fetch:', err));
-    else setUserData(null);
-  }, [initialUser]);
-
-  useEffect(() => {
-    supabase.auth.getSession()
-      .then(({ data: { session } }) => {
-        if (!initialUser) {
-          setUser(session?.user ?? null);
-          if (session?.user) fetchUserData(session.user.id).catch(err => console.error('Jonas Loto Center: Error in Layout session fetch:', err));
-        }
-      })
-      .catch(err => {
-        console.error('Jonas Loto Center: Layout session error:', err);
-      });
-    
-    let subscription: any;
-    try {
-      const result = supabase.auth.onAuthStateChange((_event, session) => {
-        if (!initialUser) {
-          setUser(session?.user ?? null);
-          if (session?.user) fetchUserData(session.user.id).catch(err => console.error('Jonas Loto Center: Error in Layout authStateChange fetch:', err));
-          else setUserData(null);
-        }
-      });
-      subscription = result.data.subscription;
-    } catch (err) {
-      console.error('Jonas Loto Center: Critical error during Layout onAuthStateChange setup:', err);
+    if (initialUser) {
+      fetchUserData(initialUser.id).catch(err => console.error('Jonas Loto Center: Error in Layout initialUser fetch:', err));
+    } else {
+      setUserData(null);
     }
-
-    return () => {
-      if (subscription) subscription.unsubscribe();
-    };
   }, [initialUser]);
 
   const fetchUserData = async (uid: string) => {
@@ -83,12 +59,18 @@ export default function Layout({ children, user: initialUser, role: initialRole 
   };
 
   useEffect(() => {
-    if (isDark) {
-      document.documentElement.classList.add('dark');
-      localStorage.setItem('theme', 'dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-      localStorage.setItem('theme', 'light');
+    if (typeof window !== 'undefined') {
+      try {
+        if (isDark) {
+          document.documentElement.classList.add('dark');
+          localStorage.setItem('theme', 'dark');
+        } else {
+          document.documentElement.classList.remove('dark');
+          localStorage.setItem('theme', 'light');
+        }
+      } catch (e) {
+        // Ignore localStorage errors
+      }
     }
   }, [isDark]);
 

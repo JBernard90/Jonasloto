@@ -19,6 +19,20 @@ export default defineConfig({
   },
   build: {
     outDir: 'dist',
-    sourcemap: true,
+    sourcemap: false, // Disable sourcemaps in production for smaller build
+    minify: 'esbuild',
+    chunkSizeWarningLimit: 1000,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'vendor-react': ['react', 'react-dom', 'react-router-dom'],
+          'vendor-supabase': ['@supabase/supabase-js'],
+          'vendor-icons': ['lucide-react'],
+          'vendor-utils': ['date-fns', 'i18next', 'react-i18next'],
+          'vendor-charts': ['recharts'],
+          'vendor-motion': ['motion'],
+        }
+      }
+    }
   }
 });

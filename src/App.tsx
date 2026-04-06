@@ -137,63 +137,81 @@ export default function App() {
     }
 
     const authTimeout = setTimeout(() => {
-      console.warn('Jonas Loto Center: Auth state change timed out, forcing loading to false');
-      setLoading(false);
-    }, 5000);
+      if (loading) {
+        console.warn('Jonas Loto Center: Auth state change timed out, forcing loading to false');
+        setLoading(false);
+      }
+    }, 3000); // Reduced to 3 seconds for better UX
 
     let subscription: any;
     try {
-      const result = supabase.auth.onAuthStateChange(async (event, session) => {
-        clearTimeout(authTimeout);
-        try {
-          const supabaseUser = session?.user || null;
-          setUser(supabaseUser);
-          
-          if (supabaseUser) {
-            const { data: userData, error } = await supabase
-              .from('users')
-              .select('*')
-              .eq('uid', supabaseUser.id)
-              .maybeSingle();
-
-            if (error) {
-              console.error('Jonas Loto Center: Error fetching user data:', error);
-            }
-
-            if (userData) {
-              let userRole = userData.role;
-              
-              // Force admin role for the owner email if not already set
-              const adminEmail = import.meta.env.VITE_ADMIN_EMAIL;
-              if (supabaseUser.email === adminEmail && userRole !== 'admin') {
-                userRole = 'admin';
-              }
-              
-              setRole(userRole);
-              setIsSuspended(userData.status === 'suspended');
-            } else {
-              // If document doesn't exist yet (first login)
-              const adminEmail = import.meta.env.VITE_ADMIN_EMAIL;
-              if (supabaseUser.email === adminEmail) {
-                setRole('admin');
-              } else {
-                setRole('client');
-              }
-            }
-          } else {
-            setRole(null);
-            setIsSuspended(false);
-          }
-        } catch (err) {
-          console.error('Jonas Loto Center: Auth state change error:', err);
-        } finally {
+      // Get initial session quickly
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        if (session) {
+          handleAuthStateChange('INITIAL', session);
+        } else {
           setLoading(false);
         }
+      }).catch(err => {
+        console.error('Jonas Loto Center: Error getting initial session:', err);
+        setLoading(false);
+      });
+
+      const result = supabase.auth.onAuthStateChange(async (event, session) => {
+        handleAuthStateChange(event, session);
       });
       subscription = result.data.subscription;
     } catch (err) {
       console.error('Jonas Loto Center: Critical error during onAuthStateChange setup:', err);
       setLoading(false);
+    }
+
+    async function handleAuthStateChange(event: string, session: any) {
+      clearTimeout(authTimeout);
+      try {
+        const supabaseUser = session?.user || null;
+        setUser(supabaseUser);
+        
+        if (supabaseUser) {
+          const { data: userData, error } = await supabase
+            .from('users')
+            .select('*')
+            .eq('uid', supabaseUser.id)
+            .maybeSingle();
+
+          if (error) {
+            console.error('Jonas Loto Center: Error fetching user data:', error);
+          }
+
+          if (userData) {
+            let userRole = userData.role;
+            
+            // Force admin role for the owner email if not already set
+            const adminEmail = import.meta.env.VITE_ADMIN_EMAIL;
+            if (supabaseUser.email === adminEmail && userRole !== 'admin') {
+              userRole = 'admin';
+            }
+            
+            setRole(userRole);
+            setIsSuspended(userData.status === 'suspended');
+          } else {
+            // If document doesn't exist yet (first login)
+            const adminEmail = import.meta.env.VITE_ADMIN_EMAIL;
+            if (supabaseUser.email === adminEmail) {
+              setRole('admin');
+            } else {
+              setRole('client');
+            }
+          }
+        } else {
+          setRole(null);
+          setIsSuspended(false);
+        }
+      } catch (err) {
+        console.error('Jonas Loto Center: Auth state change error:', err);
+      } finally {
+        setLoading(false);
+      }
     }
 
     return () => {
@@ -225,25 +243,24 @@ export default function App() {
   if (loading) {
     return (
       <div className="min-h-screen bg-primary flex flex-col items-center justify-center p-4 dark:bg-black">
-        <motion.div
-          initial={{ scale: 0.8, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          transition={{ duration: 1.5, repeat: Infinity, repeatType: "reverse" }}
-          className="mb-8"
-        >
+        <div className="mb-8 animate-pulse">
           <Logo className="w-48 h-48 text-white" />
-        </motion.div>
+        </div>
         <div className="w-48 h-1 bg-white/10 rounded-full overflow-hidden">
-          <motion.div 
-            className="h-full bg-secondary"
-            initial={{ width: "0%" }}
-            animate={{ width: "100%" }}
-            transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+          <div 
+            className="h-full bg-secondary animate-[loading_2s_ease-in-out_infinite]"
+            style={{ width: "100%" }}
           />
         </div>
         <p className="mt-4 text-white/50 font-black uppercase tracking-widest text-[10px] italic">
           Chargement de Jonas Loto...
         </p>
+        <style>{`
+          @keyframes loading {
+            0% { transform: translateX(-100%); }
+            100% { transform: translateX(100%); }
+          }
+        `}</style>
       </div>
     );
   }

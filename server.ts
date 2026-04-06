@@ -3,11 +3,13 @@ import nodemailer from 'nodemailer';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import path from 'path';
+import compression from 'compression';
 import { createServer as createViteServer } from 'vite';
 
 dotenv.config();
 
 const app = express();
+app.use(compression());
 app.use(cors());
 app.use(express.json());
 
