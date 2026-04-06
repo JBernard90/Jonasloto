@@ -2,7 +2,7 @@ import React, { Suspense, useEffect, useState, lazy } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { User } from '@supabase/supabase-js';
 import { UserX, Settings } from 'lucide-react';
-import { supabase } from './lib/supabase';
+import { supabase, isSupabaseConfigured } from './lib/supabase';
 import './lib/i18n';
 
 // Lazy load pages
@@ -20,6 +20,7 @@ const Rules = lazy(() => import('./pages/Rules'));
 import Layout from './components/Layout';
 import ErrorBoundary from './components/ErrorBoundary';
 import Logo from './components/Logo';
+import NotificationToast, { Notification } from './components/NotificationToast';
 import { motion } from 'motion/react';
 
 export default function App() {
@@ -28,6 +29,78 @@ export default function App() {
   const [isSuspended, setIsSuspended] = useState(false);
   const [loading, setLoading] = useState(true);
   const [envError, setEnvError] = useState(false);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+
+  const addNotification = (title: string, message: string, type: 'success' | 'error' | 'info' = 'info') => {
+    const id = Math.random().toString(36).substring(7);
+    setNotifications(prev => [...prev, { id, title, message, type }]);
+    setTimeout(() => removeNotification(id), 6000);
+  };
+
+  const removeNotification = (id: string) => {
+    setNotifications(prev => prev.filter(n => n.id !== id));
+  };
+
+  useEffect(() => {
+    const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
+      console.error('Jonas Loto Center: Unhandled Promise Rejection:', {
+        reason: event.reason,
+        promise: event.promise,
+        message: event.reason?.message || 'No message',
+        stack: event.reason?.stack || 'No stack'
+      });
+    };
+
+    window.addEventListener('unhandledrejection', handleUnhandledRejection);
+    
+    // Real-time listeners
+    let drawsChannel: any;
+    let ticketsChannel: any;
+
+    if (isSupabaseConfigured) {
+      try {
+        drawsChannel = supabase
+          .channel('draws-realtime')
+          .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'draws' }, (payload) => {
+            addNotification(
+              'Nouveau Tirage !',
+              `Le tirage ${payload.new.type} est disponible. Vérifiez vos billets !`,
+              'info'
+            );
+          })
+          .subscribe((status) => {
+            if (status === 'CHANNEL_ERROR') {
+              console.error('Jonas Loto Center: Draws channel subscription error - check your Supabase Realtime configuration and table publications');
+            }
+          });
+
+        ticketsChannel = supabase
+          .channel('tickets-realtime')
+          .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'tickets' }, (payload) => {
+            if (payload.new.status === 'won') {
+              addNotification(
+                'Félicitations !',
+                `Votre billet #${payload.new.id.slice(0, 8)} est gagnant !`,
+                'success'
+              );
+            }
+          })
+          .subscribe((status) => {
+            if (status === 'CHANNEL_ERROR') {
+              console.error('Jonas Loto Center: Tickets channel subscription error - check your Supabase Realtime configuration and table publications');
+            }
+          });
+      } catch (err) {
+        console.error('Jonas Loto Center: Error setting up real-time listeners:', err);
+      }
+    }
+
+    return () => {
+      window.removeEventListener('unhandledrejection', handleUnhandledRejection);
+      if (drawsChannel) supabase.removeChannel(drawsChannel).catch((err: any) => console.error('Jonas Loto Center: Error removing draws channel:', err));
+      if (ticketsChannel) supabase.removeChannel(ticketsChannel).catch((err: any) => console.error('Jonas Loto Center: Error removing tickets channel:', err));
+    };
+  }, []);
 
   useEffect(() => {
     console.log('Jonas Loto Center: App component mounted');
@@ -51,11 +124,13 @@ export default function App() {
 
     console.log('Jonas Loto Center: Supabase Config Check:', { 
       hasUrl: !!supabaseUrl, 
-      hasKey: !!supabaseAnonKey
+      urlPrefix: supabaseUrl ? supabaseUrl.substring(0, 15) : 'none',
+      hasKey: !!supabaseAnonKey,
+      keyLength: supabaseAnonKey?.length || 0
     });
 
     if (!supabaseUrl || !supabaseAnonKey) {
-      console.warn('Jonas Loto Center: Supabase configuration missing!');
+      console.error('Jonas Loto Center: Supabase configuration missing! Check Vercel environment variables.');
       setEnvError(true);
       setLoading(false);
       return;
@@ -79,7 +154,11 @@ export default function App() {
               .from('users')
               .select('*')
               .eq('uid', supabaseUser.id)
-              .single();
+              .maybeSingle();
+
+            if (error) {
+              console.error('Jonas Loto Center: Error fetching user data:', error);
+            }
 
             if (userData) {
               let userRole = userData.role;
@@ -179,7 +258,13 @@ export default function App() {
           <h1 className="text-2xl font-black text-gray-900 mb-2">Compte Suspendu</h1>
           <p className="text-gray-500 mb-6">Votre compte a été suspendu par un administrateur. Veuillez contacter le support pour plus d'informations.</p>
           <button 
-            onClick={() => supabase.auth.signOut()}
+            onClick={async () => {
+              try {
+                await supabase.auth.signOut();
+              } catch (err) {
+                console.error('Jonas Loto Center: Error during sign out:', err);
+              }
+            }}
             className="w-full bg-gray-900 text-white py-3 rounded-xl font-bold hover:bg-gray-800 transition-colors"
           >
             Se déconnecter
@@ -223,6 +308,7 @@ export default function App() {
             </Routes>
           </Suspense>
         </Layout>
+        <NotificationToast notifications={notifications} removeNotification={removeNotification} />
       </Router>
     </ErrorBoundary>
   );

@@ -6,10 +6,11 @@ import {
   Filter, ChevronRight, ArrowRight, TrendingUp,
   Zap, ShieldCheck, Smartphone, CheckCircle2,
   Trash2, PlusCircle, DollarSign, Dices, AlertCircle,
-  Globe
+  Globe, Printer
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useNavigate } from 'react-router-dom';
+import { QRCodeSVG } from 'qrcode.react';
 
 const LOTTERY_CONFIG: Record<string, string[]> = {
   'New York': ['Borlette', 'Loto 3', 'Loto 4', 'Loto 5', 'Marriage'],
@@ -36,17 +37,25 @@ export default function BuyTicket({ user: initialUser }: { user?: any }) {
   const [loading, setLoading] = useState(false);
   const [step, setStep] = useState(1);
   const [error, setError] = useState<string | null>(null);
+  const [lastTicket, setLastTicket] = useState<any>(null);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null);
-      if (session?.user) fetchUserData(session.user.id);
+      if (session?.user) fetchUserData(session.user.id).catch(err => console.error('Jonas Loto Center: Error fetching user data in BuyTicket:', err));
+    }).catch(err => {
+      console.error('Jonas Loto Center: Error getting session in BuyTicket:', err);
     });
   }, []);
 
   const fetchUserData = async (uid: string) => {
-    const { data } = await supabase.from('users').select('*').eq('uid', uid).single();
-    if (data) setUserData(data);
+    try {
+      const { data, error } = await supabase.from('users').select('*').eq('uid', uid).single();
+      if (error) throw error;
+      if (data) setUserData(data);
+    } catch (err) {
+      console.error('Jonas Loto Center: Error fetching user data in BuyTicket:', err);
+    }
   };
 
   const toggleLoto = (loto: string) => {
@@ -122,6 +131,23 @@ export default function BuyTicket({ user: initialUser }: { user?: any }) {
       return;
     }
 
+    if (!userData) {
+      setError("Données utilisateur non disponibles. Veuillez patienter.");
+      return;
+    }
+
+    // Validate entries
+    for (const loto of selectedLotos) {
+      const entry = lotoEntries[loto];
+      const requiredDigits = LOTO_DIGITS[loto] || 2;
+      for (const num of entry.numbers) {
+        if (num.length < requiredDigits) {
+          setError(`Veuillez entrer ${requiredDigits} chiffres pour ${loto}`);
+          return;
+        }
+      }
+    }
+
     if (userData.balance < totalAmount) {
       setError(t('insufficient_balance'));
       return;
@@ -129,6 +155,7 @@ export default function BuyTicket({ user: initialUser }: { user?: any }) {
 
     setLoading(true);
     setError(null);
+    console.log('Jonas Loto Center: Starting purchase...', { borlette, selectedLotos, totalAmount });
 
     try {
       // 1. Create Ticket
@@ -169,6 +196,7 @@ export default function BuyTicket({ user: initialUser }: { user?: any }) {
       if (balanceError) throw balanceError;
 
       // Success
+      setLastTicket(ticket);
       setStep(3);
     } catch (err: any) {
       setError(err.message);
@@ -378,27 +406,50 @@ export default function BuyTicket({ user: initialUser }: { user?: any }) {
           </motion.div>
         )}
 
-        {step === 3 && (
+        {step === 3 && lastTicket && (
           <motion.div
             key="step3"
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="card text-center py-20 space-y-8"
+            className="card p-10 space-y-8"
           >
-            <div className="w-24 h-24 bg-green-50 text-green-500 rounded-full flex items-center justify-center mx-auto dark:bg-green-500/10">
-              <CheckCircle2 size={64} />
-            </div>
-            <div>
-              <h2 className="text-4xl font-black text-slate-900 dark:text-white uppercase italic tracking-tighter mb-2">Achat Réussi !</h2>
-              <p className="text-slate-500 dark:text-slate-400 font-medium">Votre billet a été enregistré avec succès. Bonne chance !</p>
-            </div>
-            <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <button onClick={() => navigate('/profile')} className="btn-primary">
-                Voir mes billets
-              </button>
-              <button onClick={() => { setStep(1); setLotoEntries({}); setSelectedLotos([]); }} className="bg-slate-100 text-slate-600 px-8 py-3 rounded-xl font-bold hover:bg-slate-200 transition-all dark:bg-dark-bg dark:text-slate-400">
-                Acheter un autre
-              </button>
+            <div className="flex flex-col md:flex-row gap-10 items-center">
+              <div className="flex-grow space-y-6 text-center md:text-left">
+                <div className="w-16 h-16 bg-green-50 text-green-500 rounded-full flex items-center justify-center mx-auto md:mx-0 dark:bg-green-500/10">
+                  <CheckCircle2 size={40} />
+                </div>
+                <div>
+                  <h2 className="text-3xl font-black text-slate-900 dark:text-white uppercase italic tracking-tighter mb-2">Achat Réussi !</h2>
+                  <p className="text-slate-500 dark:text-slate-400 font-medium">Votre billet a été enregistré avec succès.</p>
+                </div>
+                <div className="flex flex-col sm:flex-row gap-4 justify-center md:justify-start">
+                  <button onClick={() => navigate('/profile')} className="btn-primary">
+                    Voir mes billets
+                  </button>
+                  <button onClick={() => { setStep(1); setLotoEntries({}); setSelectedLotos([]); setLastTicket(null); }} className="bg-slate-100 text-slate-600 px-8 py-3 rounded-xl font-bold hover:bg-slate-200 transition-all dark:bg-dark-bg dark:text-slate-400">
+                    Acheter un autre
+                  </button>
+                </div>
+              </div>
+
+              <div className="w-full max-w-[300px] bg-slate-50 dark:bg-dark-bg p-6 rounded-[2rem] border border-slate-100 dark:border-dark-border text-center space-y-4">
+                <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Billet #{lastTicket.id.slice(0, 8)}</div>
+                <div className="text-2xl font-black text-primary dark:text-secondary uppercase italic">{lastTicket.borlette}</div>
+                
+                <div className="bg-white p-4 rounded-2xl shadow-sm inline-block">
+                  <QRCodeSVG 
+                    value={JSON.stringify({ id: lastTicket.id, amount: lastTicket.amount, date: lastTicket.created_at })} 
+                    size={160}
+                  />
+                </div>
+
+                <div className="pt-4 border-t border-dashed border-slate-200 dark:border-dark-border">
+                  <div className="text-xl font-black text-slate-900 dark:text-white">{lastTicket.amount.toLocaleString()} HTG</div>
+                  <button className="mt-4 text-[10px] font-black text-primary dark:text-secondary uppercase tracking-widest flex items-center gap-2 mx-auto hover:underline">
+                    <Printer size={14} /> Imprimer le reçu
+                  </button>
+                </div>
+              </div>
             </div>
           </motion.div>
         )}

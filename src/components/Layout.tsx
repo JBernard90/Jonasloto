@@ -34,7 +34,7 @@ export default function Layout({ children, user: initialUser, role: initialRole 
 
   useEffect(() => {
     setUser(initialUser);
-    if (initialUser) fetchUserData(initialUser.id);
+    if (initialUser) fetchUserData(initialUser.id).catch(err => console.error('Jonas Loto Center: Error in Layout initialUser fetch:', err));
     else setUserData(null);
   }, [initialUser]);
 
@@ -43,45 +43,42 @@ export default function Layout({ children, user: initialUser, role: initialRole 
       .then(({ data: { session } }) => {
         if (!initialUser) {
           setUser(session?.user ?? null);
-          if (session?.user) fetchUserData(session.user.id);
+          if (session?.user) fetchUserData(session.user.id).catch(err => console.error('Jonas Loto Center: Error in Layout session fetch:', err));
         }
       })
       .catch(err => {
         console.error('Jonas Loto Center: Layout session error:', err);
       });
+    
+    let subscription: any;
+    try {
+      const result = supabase.auth.onAuthStateChange((_event, session) => {
+        if (!initialUser) {
+          setUser(session?.user ?? null);
+          if (session?.user) fetchUserData(session.user.id).catch(err => console.error('Jonas Loto Center: Error in Layout authStateChange fetch:', err));
+          else setUserData(null);
+        }
+      });
+      subscription = result.data.subscription;
+    } catch (err) {
+      console.error('Jonas Loto Center: Critical error during Layout onAuthStateChange setup:', err);
+    }
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (!initialUser) {
-        setUser(session?.user ?? null);
-        if (session?.user) fetchUserData(session.user.id);
-        else setUserData(null);
-      }
-    });
-
-    return () => subscription?.unsubscribe();
+    return () => {
+      if (subscription) subscription.unsubscribe();
+    };
   }, [initialUser]);
 
   const fetchUserData = async (uid: string) => {
     try {
-      // FIX: Remove .single() - it causes freeze if row doesn't exist
-      const { data, error } = await supabase
-        .from('users')
-        .select('*')
-        .eq('uid', uid);
-
+      const { data, error } = await supabase.from('users').select('*').eq('uid', uid).maybeSingle();
       if (error) {
         console.error('Jonas Loto Center: Error fetching user data in Layout:', error);
         return;
       }
-
-      // Get first result or null
-      if (data && data.length > 0) {
-        setUserData(data[0]);
-      } else {
-        setUserData(null);
-      }
+      if (data) setUserData(data);
     } catch (err) {
-      console.error('Jonas Loto Center: Unexpected error fetching user data:', err);
+      console.error('Jonas Loto Center: Critical error fetching user data in Layout:', err);
     }
   };
 
@@ -100,12 +97,16 @@ export default function Layout({ children, user: initialUser, role: initialRole 
     const langs = ['fr', 'en', 'ht'];
     const currentIdx = langs.indexOf(i18n.language.split('-')[0]);
     const nextLang = langs[(currentIdx + 1) % langs.length];
-    i18n.changeLanguage(nextLang);
+    i18n.changeLanguage(nextLang).catch(err => console.error('Jonas Loto Center: Error changing language:', err));
   };
 
   const handleLogout = async () => {
-    await supabase.auth.signOut();
-    navigate('/');
+    try {
+      await supabase.auth.signOut();
+      navigate('/');
+    } catch (err) {
+      console.error('Jonas Loto Center: Error during sign out in Layout:', err);
+    }
   };
 
   const navLinks = [

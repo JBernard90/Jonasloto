@@ -1,0 +1,21 @@
+{
+  "name": "Jonas Loto Center",
+  "short_name": "Jonas Loto",
+  "description": "Plateforme de loterie #1 en Haïti",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#003087",
+  "theme_color": "#003087",
+  "icons": [
+    {
+      "src": "https://picsum.photos/seed/jonasloto/192/192",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "https://picsum.photos/seed/jonasloto/512/512",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

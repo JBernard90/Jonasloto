@@ -27,6 +27,11 @@ app.post('/api/auth/send-otp', async (req, res) => {
     return res.status(400).json({ error: 'Email and code are required' });
   }
 
+  if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
+    console.error('Jonas Loto Center: Email credentials not configured');
+    return res.status(500).json({ error: 'Configuration e-mail manquante sur le serveur' });
+  }
+
   const mailOptions = {
     from: `"Jonas Loto Center" <${process.env.EMAIL_USER}>`,
     to: email,

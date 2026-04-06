@@ -9,7 +9,7 @@ import {
   ChevronRight, ArrowRight, Star
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { supabase } from '../lib/supabase';
+import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 
@@ -24,7 +24,7 @@ export default function Home() {
         const { data, error } = await supabase
           .from('draws')
           .select('*')
-          .order('date', { ascending: false })
+          .order('drawDate', { ascending: false })
           .limit(3);
         
         if (error) throw error;
@@ -36,18 +36,25 @@ export default function Home() {
       }
     };
 
-    fetchDraws();
+    fetchDraws().catch(err => console.error('Jonas Loto Center: Unhandled error in fetchDraws:', err));
 
     // Real-time listener for new draws
-    const channel = supabase
-      .channel('draws_updates')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'draws' }, (payload) => {
-        setRecentDraws(prev => [payload.new, ...prev].slice(0, 3));
-      })
-      .subscribe();
+    let channel: any;
+    if (isSupabaseConfigured) {
+      channel = supabase
+        .channel('draws_updates')
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'draws' }, (payload) => {
+          setRecentDraws(prev => [payload.new, ...prev].slice(0, 3));
+        })
+        .subscribe((status) => {
+          if (status === 'CHANNEL_ERROR') {
+            console.error('Jonas Loto Center: Home draws updates channel subscription error - check your Supabase Realtime configuration and table publications');
+          }
+        });
+    }
 
     return () => {
-      supabase.removeChannel(channel);
+      if (channel) supabase.removeChannel(channel).catch(err => console.error('Jonas Loto Center: Error removing home channel:', err));
     };
   }, []);
 
@@ -150,12 +157,12 @@ export default function Home() {
                     {draw.type}
                   </div>
                   <div className="text-xs font-bold text-slate-400">
-                    {format(new Date(draw.date), 'PPP', { locale: fr })}
+                    {format(new Date(draw.drawDate), 'PPP', { locale: fr })}
                   </div>
                 </div>
                 
                 <div className="flex gap-3 justify-center mb-8">
-                  {draw.numbers.map((num: string, idx: number) => (
+                  {draw.winningNumbers && Object.values(draw.winningNumbers).map((num: any, idx: number) => (
                     <div key={idx} className="w-12 h-12 rounded-full bg-slate-900 text-white flex items-center justify-center font-black text-xl shadow-lg shadow-slate-900/20 group-hover:bg-primary transition-colors dark:bg-slate-800 dark:group-hover:bg-secondary dark:group-hover:text-primary">
                       {num}
                     </div>

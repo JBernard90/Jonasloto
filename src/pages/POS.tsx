@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { motion, AnimatePresence } from 'motion/react';
+import { QRCodeSVG } from 'qrcode.react';
 import { 
   Monitor, Ticket, DollarSign, Printer, 
   Search, CheckCircle2, History, UserPlus, 
-  Zap, ChevronLeft, Dices, Trash2, PlusCircle
+  Zap, ChevronLeft, Dices, Trash2, PlusCircle,
+  Camera, AlertCircle
 } from 'lucide-react';
-import { supabase } from '../lib/supabase';
+import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { format, formatDistanceToNow } from 'date-fns';
 import { fr } from 'date-fns/locale';
 
@@ -31,55 +33,83 @@ export default function POS() {
   const [selectedLotos, setSelectedLotos] = useState<string[]>([]);
   const [lotoEntries, setLotoEntries] = useState<Record<string, { numbers: string[], amounts: number[] }>>({});
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [lastTicket, setLastTicket] = useState<any>(null);
   const [recentSales, setRecentSales] = useState<any[]>([]);
   const [step, setStep] = useState(1);
   const [todaySales, setTodaySales] = useState(0);
   const [todayTicketsCount, setTodayTicketsCount] = useState(0);
+  const [scanning, setScanning] = useState(false);
+  const [isClientModalOpen, setIsClientModalOpen] = useState(false);
+  const [newClient, setNewClient] = useState({
+    displayName: '',
+    email: '',
+    phoneNumber: ''
+  });
+  const [clientLoading, setClientLoading] = useState(false);
+  const [verifyId, setVerifyId] = useState('');
+  const [verifiedTicket, setVerifiedTicket] = useState<any>(null);
+  const [verifying, setVerifying] = useState(false);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null);
-      if (session?.user) fetchRecentSales(session.user.id);
+      if (session?.user) fetchRecentSales(session.user.id).catch(err => console.error('Jonas Loto Center: Error fetching recent sales in POS:', err));
+    }).catch(err => {
+      console.error('Jonas Loto Center: Error getting session in POS:', err);
     });
 
-    const channel = supabase
-      .channel('pos_updates')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'tickets' }, (payload) => {
-        if (payload.new.agentId === user?.id) {
-          setRecentSales(prev => [payload.new, ...prev].slice(0, 5));
-          setTodaySales(prev => prev + (payload.new.amount || 0));
-          setTodayTicketsCount(prev => prev + 1);
-        }
-      })
-      .subscribe();
+    let channel: any;
+    if (isSupabaseConfigured) {
+      channel = supabase
+        .channel('pos_updates')
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'tickets' }, (payload) => {
+          if (payload.new.agentId === user?.id) {
+            setRecentSales(prev => [payload.new, ...prev].slice(0, 5));
+            setTodaySales(prev => prev + (payload.new.amount || 0));
+            setTodayTicketsCount(prev => prev + 1);
+          }
+        })
+        .subscribe((status) => {
+          if (status === 'CHANNEL_ERROR') {
+            console.error('Jonas Loto Center: POS updates channel subscription error - check your Supabase Realtime configuration and table publications');
+          }
+        });
+    }
 
     return () => {
-      supabase.removeChannel(channel);
+      if (channel) supabase.removeChannel(channel).catch(err => console.error('Jonas Loto Center: Error removing POS channel:', err));
     };
   }, [user]);
 
   const fetchRecentSales = async (agentId: string) => {
-    const { data } = await supabase
-      .from('tickets')
-      .select('*')
-      .eq('agentId', agentId)
-      .order('createdAt', { ascending: false })
-      .limit(5);
-    
-    if (data) setRecentSales(data);
-
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const { data: todayData, count } = await supabase
-      .from('tickets')
-      .select('amount', { count: 'exact' })
-      .eq('agentId', agentId)
-      .gte('createdAt', today.toISOString());
-    
-    const total = todayData?.reduce((sum, s) => sum + (s.amount || 0), 0) || 0;
-    setTodaySales(total);
-    setTodayTicketsCount(count || 0);
+    try {
+      const { data, error: salesError } = await supabase
+        .from('tickets')
+        .select('*')
+        .eq('agentId', agentId)
+        .order('createdAt', { ascending: false })
+        .limit(5);
+      
+      if (salesError) throw salesError;
+      if (data) setRecentSales(data);
+  
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const { data: todayData, count, error: todayError } = await supabase
+        .from('tickets')
+        .select('amount', { count: 'exact' })
+        .eq('agentId', agentId)
+        .gte('createdAt', today.toISOString());
+      
+      if (todayError) throw todayError;
+  
+      const total = todayData?.reduce((sum, s) => sum + (s.amount || 0), 0) || 0;
+      setTodaySales(total);
+      setTodayTicketsCount(count || 0);
+    } catch (err) {
+      console.error('Jonas Loto Center: Error fetching recent sales in POS:', err);
+    }
   };
 
   const handleBorletteSelect = (type: string) => {
@@ -156,14 +186,29 @@ export default function POS() {
 
   const handleSale = async () => {
     if (!user) return;
+    
+    // Validate entries
+    for (const loto of selectedLotos) {
+      const entry = lotoEntries[loto];
+      const requiredDigits = LOTO_DIGITS[loto] || 2;
+      for (const num of entry.numbers) {
+        if (num.length < requiredDigits) {
+          setError(`Veuillez entrer ${requiredDigits} chiffres pour ${loto}`);
+          return;
+        }
+      }
+    }
+
     setLoading(true);
+    setError(null);
+    console.log('Jonas Loto Center: Starting POS sale...', { borlette, selectedLotos, totalAmount });
 
     try {
       const { data: ticket, error } = await supabase
         .from('tickets')
         .insert({
           agentId: user.id,
-          userId: 'anonymous_pos',
+          userId: null,
           borlette,
           lotos: selectedLotos,
           entries: lotoEntries,
@@ -193,10 +238,59 @@ export default function POS() {
       });
 
     } catch (err: any) {
-      console.error(err);
+      console.error('Jonas Loto Center: POS handleSale error:', err);
+      setError(err.message || "Une erreur est survenue lors de la vente.");
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleCreateClient = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setClientLoading(true);
+    try {
+      const { error } = await supabase.from('users').insert({
+        ...newClient,
+        role: 'client',
+        status: 'active',
+        balance: 0,
+        createdAt: new Date().toISOString()
+      });
+      if (error) throw error;
+      setIsClientModalOpen(false);
+      setNewClient({ displayName: '', email: '', phoneNumber: '' });
+      alert('Compte client créé avec succès !');
+    } catch (err: any) {
+      console.error('Jonas Loto Center: Error creating client in POS:', err);
+      alert('Erreur lors de la création du compte client: ' + err.message);
+    } finally {
+      setClientLoading(false);
+    }
+  };
+
+  const handleVerifyTicket = async () => {
+    if (!verifyId) return;
+    setVerifying(true);
+    setVerifiedTicket(null);
+    try {
+      const { data, error } = await supabase
+        .from('tickets')
+        .select('*, agent:users!agentId(displayName)')
+        .eq('id', verifyId)
+        .single();
+      
+      if (error) throw error;
+      setVerifiedTicket(data);
+    } catch (err: any) {
+      console.error('Jonas Loto Center: Error verifying ticket in POS:', err);
+      alert('Billet non trouvé ou erreur: ' + err.message);
+    } finally {
+      setVerifying(false);
+    }
+  };
+
+  const handlePrint = () => {
+    window.print();
   };
 
   return (
@@ -204,6 +298,11 @@ export default function POS() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* POS Terminal */}
         <div className="lg:col-span-2 space-y-8">
+          {error && (
+            <div className="p-4 bg-accent/5 border border-accent/10 rounded-xl flex items-center gap-3 text-accent text-xs font-bold">
+              <AlertCircle size={18} /> {error}
+            </div>
+          )}
           <div className="card p-8 md:p-10">
             <div className="flex items-center justify-between mb-10">
               <h2 className="text-3xl font-black text-slate-900 dark:text-white uppercase italic tracking-tighter flex items-center gap-3">
@@ -360,7 +459,10 @@ export default function POS() {
                           </>
                         )}
                       </button>
-                      <button className="bg-slate-100 text-slate-600 px-6 rounded-2xl hover:bg-slate-200 transition-all dark:bg-dark-bg dark:text-slate-400">
+                      <button 
+                        onClick={handlePrint}
+                        className="bg-slate-100 text-slate-600 px-6 rounded-2xl hover:bg-slate-200 transition-all dark:bg-dark-bg dark:text-slate-400"
+                      >
                         <Printer size={24} />
                       </button>
                     </div>
@@ -437,13 +539,48 @@ export default function POS() {
                 <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" />
                 <input 
                   type="text" 
-                  placeholder="ID du billet ou Scanner..."
+                  placeholder="ID du billet..."
+                  value={verifyId}
+                  onChange={(e) => setVerifyId(e.target.value)}
                   className="w-full pl-12 pr-4 py-4 bg-slate-800 border-none rounded-2xl text-sm focus:ring-2 focus:ring-primary focus:outline-none transition-all"
                 />
               </div>
-              <button className="w-full btn-primary py-4">
-                Vérifier les gains
-              </button>
+              <div className="grid grid-cols-2 gap-3">
+                <button 
+                  onClick={handleVerifyTicket}
+                  disabled={verifying}
+                  className="btn-primary py-4 text-xs"
+                >
+                  {verifying ? '...' : 'Vérifier'}
+                </button>
+                <button 
+                  onClick={() => setScanning(true)}
+                  className="bg-slate-800 text-white py-4 rounded-2xl font-bold text-xs uppercase tracking-widest hover:bg-slate-700 transition-all flex items-center justify-center gap-2"
+                >
+                  <Camera size={16} /> Scanner
+                </button>
+              </div>
+
+              {verifiedTicket && (
+                <motion.div 
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="p-4 bg-slate-800 rounded-2xl space-y-2"
+                >
+                  <div className="flex justify-between text-xs font-bold">
+                    <span className="text-slate-400 uppercase tracking-widest">Statut</span>
+                    <span className={verifiedTicket.status === 'won' ? 'text-green-500' : 'text-primary'}>{verifiedTicket.status.toUpperCase()}</span>
+                  </div>
+                  <div className="flex justify-between text-xs font-bold">
+                    <span className="text-slate-400 uppercase tracking-widest">Montant</span>
+                    <span className="text-white">{verifiedTicket.amount} HTG</span>
+                  </div>
+                  <div className="flex justify-between text-xs font-bold">
+                    <span className="text-slate-400 uppercase tracking-widest">Agent</span>
+                    <span className="text-white">{verifiedTicket.agent?.displayName || 'Inconnu'}</span>
+                  </div>
+                </motion.div>
+              )}
             </div>
           </div>
 
@@ -475,10 +612,20 @@ export default function POS() {
 
                 <div className="pt-6 border-t border-dashed border-slate-200 dark:border-dark-border">
                   <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Total</div>
-                  <div className="text-2xl font-black text-primary dark:text-secondary">{lastTicket.amount.toLocaleString()} HTG</div>
+                  <div className="text-2xl font-black text-primary dark:text-secondary mb-6">{lastTicket.amount.toLocaleString()} HTG</div>
+                  
+                  <div className="flex justify-center mb-6 bg-white p-4 rounded-2xl shadow-sm">
+                    <QRCodeSVG 
+                      value={JSON.stringify({ id: lastTicket.id, amount: lastTicket.amount, date: lastTicket.createdAt })} 
+                      size={128}
+                    />
+                  </div>
                 </div>
 
-                <button className="w-full bg-slate-900 text-white py-3 rounded-xl font-bold text-xs uppercase tracking-widest hover:bg-black transition-all flex items-center justify-center gap-2">
+                <button 
+                  onClick={handlePrint}
+                  className="w-full bg-slate-900 text-white py-3 rounded-xl font-bold text-xs uppercase tracking-widest hover:bg-black transition-all flex items-center justify-center gap-2"
+                >
                   <Printer size={16} /> Réimprimer
                 </button>
               </div>
@@ -490,12 +637,81 @@ export default function POS() {
               <UserPlus size={20} /> Nouveau Client ?
             </h3>
             <p className="text-slate-500 text-xs font-medium mb-6 leading-relaxed">Inscrivez le client pour qu'il puisse recevoir ses notifications de gains par SMS et e-mail.</p>
-            <button className="w-full py-3 rounded-xl border border-primary/20 text-primary font-black text-xs uppercase tracking-widest hover:bg-primary/5 transition-all dark:border-secondary/20 dark:text-secondary">
+            <button 
+              onClick={() => setIsClientModalOpen(true)}
+              className="w-full py-3 rounded-xl border border-primary/20 text-primary font-black text-xs uppercase tracking-widest hover:bg-primary/5 transition-all dark:border-secondary/20 dark:text-secondary"
+            >
               Créer un compte client
             </button>
           </div>
         </div>
       </div>
+
+      {/* Create Client Modal */}
+      {isClientModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-white dark:bg-dark-surface rounded-[2.5rem] w-full max-w-md overflow-hidden shadow-2xl"
+          >
+            <div className="p-8 border-b border-slate-100 dark:border-dark-border flex items-center justify-between">
+              <h3 className="text-2xl font-black text-slate-900 dark:text-white uppercase italic tracking-tighter">Nouveau Client</h3>
+              <button onClick={() => setIsClientModalOpen(false)} className="p-2 hover:bg-slate-100 rounded-full dark:hover:bg-dark-bg">
+                <PlusCircle className="rotate-45 text-slate-400" size={24} />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateClient} className="p-8 space-y-6">
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Nom Complet</label>
+                <input 
+                  type="text"
+                  placeholder="Jean Dupont"
+                  className="input-field"
+                  value={newClient.displayName}
+                  onChange={(e) => setNewClient({...newClient, displayName: e.target.value})}
+                  required
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Email</label>
+                <input 
+                  type="email"
+                  placeholder="client@email.com"
+                  className="input-field"
+                  value={newClient.email}
+                  onChange={(e) => setNewClient({...newClient, email: e.target.value})}
+                  required
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Téléphone</label>
+                <input 
+                  type="tel"
+                  placeholder="1234 5678"
+                  className="input-field"
+                  value={newClient.phoneNumber}
+                  onChange={(e) => setNewClient({...newClient, phoneNumber: e.target.value})}
+                  required
+                />
+              </div>
+
+              <button type="submit" disabled={clientLoading} className="w-full btn-primary py-4 mt-4 flex items-center justify-center gap-2">
+                {clientLoading ? (
+                  <div className="w-6 h-6 border-4 border-white border-t-transparent rounded-full animate-spin"></div>
+                ) : (
+                  <>
+                    <UserPlus size={20} /> Créer le compte
+                  </>
+                )}
+              </button>
+            </form>
+          </motion.div>
+        </div>
+      )}
     </div>
   );
 }

@@ -13,6 +13,7 @@ import { supabase } from '../lib/supabase';
 import { format, parseISO } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import Logo from '../components/Logo';
+import TicketCard from '../components/TicketCard';
 
 export default function Profile({ user: initialUser }: { user?: any }) {
   const { t } = useTranslation();
@@ -22,6 +23,10 @@ export default function Profile({ user: initialUser }: { user?: any }) {
   const [authMode, setAuthMode] = useState<'login' | 'signup'>('login');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [tickets, setTickets] = useState<any[]>([]);
+  const [transactions, setTransactions] = useState<any[]>([]);
+  const [isDepositModalOpen, setIsDepositModalOpen] = useState(false);
+  const [depositAmount, setDepositAmount] = useState(100);
   
   // Form states
   const [email, setEmail] = useState('');
@@ -29,6 +34,7 @@ export default function Profile({ user: initialUser }: { user?: any }) {
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
   const [dob, setDob] = useState('');
+  const [role, setRole] = useState<'client' | 'agent' | 'supervisor' | 'admin'>('client');
   const [idType, setIdType] = useState<'passport' | 'license' | 'cin'>('cin');
   const [idNumber, setIdNumber] = useState('');
   const [idPhotoFront, setIdPhotoFront] = useState<File | null>(null);
@@ -46,19 +52,56 @@ export default function Profile({ user: initialUser }: { user?: any }) {
           navigate('/otp', { state: { email: currentUser.email, userId: currentUser.id } });
           return;
         }
-        fetchUserData(currentUser.id);
+        fetchUserData(currentUser.id).catch(err => console.error('Jonas Loto Center: Error fetching user data:', err));
+        fetchUserTickets(currentUser.id).catch(err => console.error('Jonas Loto Center: Error fetching user tickets:', err));
+        fetchUserTransactions(currentUser.id).catch(err => console.error('Jonas Loto Center: Error fetching user transactions:', err));
       }
+    }).catch(err => {
+      console.error('Jonas Loto Center: Error getting session in Profile:', err);
     });
   }, [navigate]);
 
   const fetchUserData = async (uid: string) => {
-    const { data } = await supabase.from('users').select('*').eq('uid', uid).single();
-    if (data) {
-      setUserData(data);
-    } else {
-      // If no user data found, it means it's a new signup (e.g. Google)
-      // We need to show the "Complete Profile" form
-      setAuthMode('signup');
+    try {
+      const { data, error } = await supabase.from('users').select('*').eq('uid', uid).single();
+      if (error) throw error;
+      if (data) {
+        setUserData(data);
+      } else {
+        // If no user data found, it means it's a new signup (e.g. Google)
+        // We need to show the "Complete Profile" form
+        setAuthMode('signup');
+      }
+    } catch (err) {
+      console.error('Jonas Loto Center: fetchUserData error:', err);
+    }
+  };
+
+  const fetchUserTickets = async (uid: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('tickets')
+        .select('*')
+        .eq('userId', uid)
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      if (data) setTickets(data);
+    } catch (err) {
+      console.error('Jonas Loto Center: fetchUserTickets error:', err);
+    }
+  };
+
+  const fetchUserTransactions = async (uid: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('transactions')
+        .select('*')
+        .eq('userId', uid)
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      if (data) setTransactions(data);
+    } catch (err) {
+      console.error('Jonas Loto Center: fetchUserTransactions error:', err);
     }
   };
 
@@ -69,7 +112,8 @@ export default function Profile({ user: initialUser }: { user?: any }) {
 
     const { error: uploadError } = await supabase.storage
       .from('verification-docs')
-      .upload(filePath, file);
+      .upload(filePath, file)
+      .catch(err => ({ error: err }));
 
     if (uploadError) throw uploadError;
 
@@ -160,7 +204,7 @@ export default function Profile({ user: initialUser }: { user?: any }) {
           idNumber,
           idPhotoFront: frontUrl,
           idPhotoBack: backUrl,
-          role: 'client',
+          role: role,
           status: 'pending_verification',
           balance: 0
         });
@@ -172,7 +216,7 @@ export default function Profile({ user: initialUser }: { user?: any }) {
         if (!isVerified) {
           navigate('/otp', { state: { email: currentEmail, userId: currentUserId } });
         } else {
-          fetchUserData(currentUserId!);
+          fetchUserData(currentUserId!).catch(err => console.error('Jonas Loto Center: Error in handleAuth fetchUserData:', err));
         }
       } else {
         const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
@@ -189,15 +233,48 @@ export default function Profile({ user: initialUser }: { user?: any }) {
       }
     } catch (err: any) {
       setError(err.message);
+      console.error('Jonas Loto Center: handleAuth error:', err);
     } finally {
       setLoading(false);
     }
   };
 
   const handleLogout = async () => {
-    await supabase.auth.signOut();
-    setUser(null);
-    setUserData(null);
+    try {
+      await supabase.auth.signOut().catch(err => console.error('Jonas Loto Center: Error during sign out in Profile:', err));
+      setUser(null);
+      setUserData(null);
+    } catch (err) {
+      console.error('Jonas Loto Center: Error during sign out in Profile:', err);
+    }
+  };
+
+  const handleDeposit = async () => {
+    if (!user || depositAmount <= 0) return;
+    setLoading(true);
+    try {
+      const { error: txError } = await supabase.from('transactions').insert({
+        userId: user.id,
+        amount: depositAmount,
+        type: 'deposit',
+        status: 'completed',
+        description: 'Dépôt manuel (Simulation)'
+      });
+      if (txError) throw txError;
+
+      const { error: balanceError } = await supabase.from('users').update({
+        balance: (userData.balance || 0) + depositAmount
+      }).eq('uid', user.id);
+      if (balanceError) throw balanceError;
+
+      setUserData({ ...userData, balance: (userData.balance || 0) + depositAmount });
+      setIsDepositModalOpen(false);
+      fetchUserTransactions(user.id).catch(err => console.error('Jonas Loto Center: Error in handleDeposit fetchUserTransactions:', err));
+    } catch (err) {
+      console.error('Jonas Loto Center: Error during deposit:', err);
+    } finally {
+      setLoading(false);
+    }
   };
 
   if (user && userData) {
@@ -245,7 +322,10 @@ export default function Profile({ user: initialUser }: { user?: any }) {
               </div>
 
               <div className="mt-8 space-y-2">
-                <button className="w-full btn-primary py-3 flex items-center justify-center gap-2">
+                <button 
+                  onClick={() => setIsDepositModalOpen(true)}
+                  className="w-full btn-primary py-3 flex items-center justify-center gap-2"
+                >
                   <PlusCircle size={18} /> {t('deposit')}
                 </button>
                 <button onClick={handleLogout} className="w-full bg-slate-100 text-slate-600 py-3 rounded-xl font-bold text-sm hover:bg-slate-200 transition-all flex items-center justify-center gap-2 dark:bg-dark-bg dark:text-slate-400 dark:hover:bg-dark-border">
@@ -253,6 +333,67 @@ export default function Profile({ user: initialUser }: { user?: any }) {
                 </button>
               </div>
             </div>
+
+            {/* Deposit Modal */}
+            {isDepositModalOpen && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+                <motion.div 
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  className="bg-white dark:bg-dark-surface rounded-[2.5rem] w-full max-w-md overflow-hidden shadow-2xl"
+                >
+                  <div className="p-8 border-b border-slate-100 dark:border-dark-border flex items-center justify-between">
+                    <h3 className="text-2xl font-black text-slate-900 dark:text-white uppercase italic tracking-tighter">Effectuer un Dépôt</h3>
+                    <button onClick={() => setIsDepositModalOpen(false)} className="p-2 hover:bg-slate-100 rounded-full dark:hover:bg-dark-bg">
+                      <X className="text-slate-400" size={24} />
+                    </button>
+                  </div>
+
+                  <div className="p-8 space-y-6">
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Montant (HTG)</label>
+                      <input 
+                        type="number"
+                        className="input-field"
+                        value={depositAmount}
+                        onChange={(e) => setDepositAmount(parseFloat(e.target.value))}
+                        min="1"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-2">
+                      {[100, 500, 1000].map(amt => (
+                        <button 
+                          key={amt}
+                          onClick={() => setDepositAmount(amt)}
+                          className={`py-2 rounded-xl border font-black text-xs transition-all ${
+                            depositAmount === amt 
+                              ? 'bg-primary text-white border-primary dark:bg-secondary dark:text-primary dark:border-secondary' 
+                              : 'border-slate-100 text-slate-500 hover:border-primary/20 dark:border-dark-border dark:text-slate-400'
+                          }`}
+                        >
+                          {amt}
+                        </button>
+                      ))}
+                    </div>
+
+                    <button 
+                      onClick={handleDeposit}
+                      disabled={loading || depositAmount <= 0}
+                      className="w-full btn-primary py-4 mt-4 flex items-center justify-center gap-2"
+                    >
+                      {loading ? (
+                        <div className="w-6 h-6 border-4 border-white border-t-transparent rounded-full animate-spin"></div>
+                      ) : (
+                        <>
+                          <PlusCircle size={20} /> Confirmer le Dépôt
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </motion.div>
+              </div>
+            )}
 
             <div className="card">
               <h3 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-widest mb-6 flex items-center gap-2">
@@ -294,42 +435,39 @@ export default function Profile({ user: initialUser }: { user?: any }) {
               </div>
 
               <div className="space-y-4">
-                {/* Mock transactions for now */}
-                <div className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100 dark:bg-dark-bg dark:border-dark-border">
-                  <div className="flex items-center gap-4">
-                    <div className="w-10 h-10 bg-green-50 text-green-600 rounded-xl flex items-center justify-center dark:bg-green-500/10">
-                      <ArrowUpCircle size={20} />
+                {transactions.length > 0 ? (
+                  transactions.map(tx => (
+                    <div key={tx.id} className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100 dark:bg-dark-bg dark:border-dark-border">
+                      <div className="flex items-center gap-4">
+                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
+                          tx.type === 'deposit' ? 'bg-green-50 text-green-600 dark:bg-green-500/10' : 
+                          tx.type === 'purchase' ? 'bg-blue-50 text-blue-600 dark:bg-blue-500/10' :
+                          'bg-amber-50 text-amber-600 dark:bg-amber-500/10'
+                        }`}>
+                          {tx.type === 'deposit' ? <ArrowUpCircle size={20} /> : 
+                           tx.type === 'purchase' ? <Ticket size={20} /> : 
+                           <ArrowRightLeft size={20} />}
+                        </div>
+                        <div>
+                          <div className="text-sm font-bold text-slate-900 dark:text-white">{tx.description || tx.type}</div>
+                          <div className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">
+                            {format(parseISO(tx.created_at), 'dd MMMM yyyy • HH:mm', { locale: fr })}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className={`text-sm font-black ${tx.type === 'deposit' ? 'text-green-600' : 'text-slate-900 dark:text-white'}`}>
+                          {tx.type === 'deposit' ? '+' : '-'} {tx.amount.toLocaleString()} HTG
+                        </div>
+                        <div className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">{tx.status}</div>
+                      </div>
                     </div>
-                    <div>
-                      <div className="text-sm font-bold text-slate-900 dark:text-white">Dépôt MonCash</div>
-                      <div className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">12 Mars 2026 • 14:30</div>
-                    </div>
+                  ))
+                ) : (
+                  <div className="text-center py-12">
+                    <p className="text-slate-400 text-sm font-medium italic">Aucune transaction trouvée.</p>
                   </div>
-                  <div className="text-right">
-                    <div className="text-sm font-black text-green-600">+ 2,500 HTG</div>
-                    <div className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Réussi</div>
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100 dark:bg-dark-bg dark:border-dark-border">
-                  <div className="flex items-center gap-4">
-                    <div className="w-10 h-10 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center dark:bg-blue-500/10">
-                      <Ticket size={20} />
-                    </div>
-                    <div>
-                      <div className="text-sm font-bold text-slate-900 dark:text-white">Achat Billet New York</div>
-                      <div className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">10 Mars 2026 • 09:15</div>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <div className="text-sm font-black text-slate-900 dark:text-white">- 150 HTG</div>
-                    <div className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Billet #NY-882</div>
-                  </div>
-                </div>
-
-                <div className="text-center py-12">
-                  <p className="text-slate-400 text-sm font-medium italic">Plus de transactions seront affichées ici.</p>
-                </div>
+                )}
               </div>
             </div>
 
@@ -339,25 +477,12 @@ export default function Profile({ user: initialUser }: { user?: any }) {
               </h2>
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="p-6 bg-primary/5 rounded-3xl border border-primary/10 relative overflow-hidden dark:bg-secondary/5 dark:border-secondary/10">
-                  <div className="absolute top-0 right-0 p-2 bg-primary text-white text-[8px] font-black uppercase dark:bg-secondary dark:text-primary">New York</div>
-                  <div className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">ID: #NY-882</div>
-                  <div className="flex gap-2 mb-6">
-                    {['12', '45', '88'].map(n => (
-                      <div key={n} className="w-10 h-10 bg-white rounded-full flex items-center justify-center font-black text-primary shadow-sm dark:bg-dark-bg dark:text-secondary">{n}</div>
-                    ))}
-                  </div>
-                  <div className="flex justify-between items-end">
-                    <div>
-                      <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Mise</div>
-                      <div className="text-lg font-black text-primary dark:text-secondary">150 HTG</div>
-                    </div>
-                    <div className="text-[10px] font-black text-green-500 uppercase tracking-widest">En attente</div>
-                  </div>
-                </div>
+                {tickets.filter(t => t.status === 'active').map(ticket => (
+                  <TicketCard key={ticket.id} ticket={ticket} />
+                ))}
                 
-                <div className="flex items-center justify-center border-2 border-dashed border-slate-100 rounded-3xl p-8 dark:border-dark-border">
-                  <Link to="/buy" className="text-slate-400 hover:text-primary transition-all flex flex-col items-center gap-2">
+                <div className="flex items-center justify-center border-2 border-dashed border-slate-100 rounded-3xl p-8 dark:border-dark-border min-h-[200px]">
+                  <Link to="/buy-ticket" className="text-slate-400 hover:text-primary transition-all flex flex-col items-center gap-2">
                     <PlusCircle size={32} />
                     <span className="text-xs font-black uppercase tracking-widest">Nouveau Billet</span>
                   </Link>
@@ -422,6 +547,21 @@ export default function Profile({ user: initialUser }: { user?: any }) {
                       required
                     />
                   </div>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Rôle de l'utilisateur</label>
+                  <select 
+                    value={role}
+                    onChange={(e) => setRole(e.target.value as any)}
+                    className="input-field"
+                    required
+                  >
+                    <option value="client">Client</option>
+                    <option value="agent">Agent (Vendeur)</option>
+                    <option value="supervisor">Superviseur</option>
+                    <option value="admin">Administrateur</option>
+                  </select>
                 </div>
 
                 <div className="space-y-1">

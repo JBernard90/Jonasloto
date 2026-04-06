@@ -6,7 +6,7 @@ import {
   Filter, ChevronRight, ArrowRight, TrendingUp,
   CheckCircle2
 } from 'lucide-react';
-import { supabase } from '../lib/supabase';
+import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 
@@ -18,31 +18,44 @@ export default function Results() {
 
   useEffect(() => {
     const fetchDraws = async () => {
-      let query = supabase
-        .from('draws')
-        .select('*')
-        .order('date', { ascending: false });
-      
-      if (filter !== 'all') {
-        query = query.eq('type', filter);
+      try {
+        let query = supabase
+          .from('draws')
+          .select('*')
+          .order('drawDate', { ascending: false });
+        
+        if (filter !== 'all') {
+          query = query.eq('type', filter);
+        }
+  
+        const { data, error } = await query;
+        if (error) throw error;
+        if (data) setDraws(data);
+      } catch (err) {
+        console.error('Jonas Loto Center: Error fetching draws in Results:', err);
+      } finally {
+        setLoading(false);
       }
-
-      const { data, error } = await query;
-      if (data) setDraws(data);
-      setLoading(false);
     };
 
-    fetchDraws();
+    fetchDraws().catch(err => console.error('Jonas Loto Center: Error in fetchDraws in Results:', err));
 
-    const channel = supabase
-      .channel('results_updates')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'draws' }, (payload) => {
-        setDraws(prev => [payload.new, ...prev]);
-      })
-      .subscribe();
+    let channel: any;
+    if (isSupabaseConfigured) {
+      channel = supabase
+        .channel('results_updates')
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'draws' }, (payload) => {
+          setDraws(prev => [payload.new, ...prev]);
+        })
+        .subscribe((status) => {
+          if (status === 'CHANNEL_ERROR') {
+            console.error('Jonas Loto Center: Results channel subscription error - check your Supabase Realtime configuration and table publications');
+          }
+        });
+    }
 
     return () => {
-      supabase.removeChannel(channel);
+      if (channel) supabase.removeChannel(channel).catch(err => console.error('Jonas Loto Center: Error removing results channel:', err));
     };
   }, [filter]);
 
@@ -99,7 +112,7 @@ export default function Results() {
                       {draw.type}
                     </span>
                     <span className="text-xs font-bold text-slate-400">
-                      {format(new Date(draw.date), 'PPP', { locale: fr })}
+                      {format(new Date(draw.drawDate), 'PPP', { locale: fr })}
                     </span>
                   </div>
                   <h3 className="text-xl font-black text-slate-900 dark:text-white uppercase italic tracking-tighter">
@@ -109,7 +122,7 @@ export default function Results() {
               </div>
 
               <div className="flex gap-3 justify-center">
-                {draw.numbers.map((num: string, idx: number) => (
+                {draw.winningNumbers && Object.values(draw.winningNumbers).map((num: any, idx: number) => (
                   <div key={idx} className="w-14 h-14 rounded-full bg-slate-900 text-white flex items-center justify-center font-black text-2xl shadow-lg shadow-slate-900/20 group-hover:bg-primary transition-colors dark:bg-slate-800 dark:group-hover:bg-secondary dark:group-hover:text-primary">
                     {num}
                   </div>

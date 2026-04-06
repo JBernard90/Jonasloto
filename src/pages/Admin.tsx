@@ -29,40 +29,101 @@ export default function Admin() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'stats' | 'users' | 'draws' | 'verification'>('stats');
   const [selectedUser, setSelectedUser] = useState<any>(null);
+  const [isDrawModalOpen, setIsDrawModalOpen] = useState(false);
+  const [newDraw, setNewDraw] = useState({
+    type: 'New York',
+    winningNumbers: { first: '', second: '', third: '' },
+    jackpot: 0,
+    status: 'active',
+    drawDate: format(new Date(), "yyyy-MM-dd'T'HH:mm")
+  });
 
-  useEffect(() => {
-    const fetchData = async () => {
-      const { count: usersCount } = await supabase.from('users').select('*', { count: 'exact', head: true });
-      const { data: ticketsData } = await supabase.from('tickets').select('amount');
-      const { count: drawsCount } = await supabase.from('draws').select('*', { count: 'exact', head: true });
-      const { count: activeTicketsCount } = await supabase.from('tickets').select('*', { count: 'exact', head: true }).eq('status', 'active');
+  const fetchData = async () => {
+      try {
+        const { count: usersCount, error: usersError } = await supabase.from('users').select('*', { count: 'exact', head: true });
+        if (usersError) throw usersError;
 
-      const totalSales = ticketsData?.reduce((sum, t) => sum + (t.amount || 0), 0) || 0;
+        const { data: ticketsData, error: ticketsError } = await supabase.from('tickets').select('amount');
+        if (ticketsError) throw ticketsError;
 
-      setStats({
-        totalUsers: usersCount || 0,
-        totalSales,
-        totalDraws: drawsCount || 0,
-        activeTickets: activeTicketsCount || 0
-      });
+        const { count: drawsCount, error: drawsError } = await supabase.from('draws').select('*', { count: 'exact', head: true });
+        if (drawsError) throw drawsError;
 
-      const { data: usersList } = await supabase.from('users').select('*').order('createdAt', { ascending: false });
-      const { data: drawsList } = await supabase.from('draws').select('*').order('date', { ascending: false }).limit(10);
+        const { count: activeTicketsCount, error: activeTicketsError } = await supabase.from('tickets').select('*', { count: 'exact', head: true }).eq('status', 'active');
+        if (activeTicketsError) throw activeTicketsError;
 
-      setUsers(usersList || []);
-      setDraws(drawsList || []);
-      setLoading(false);
+        const totalSales = ticketsData?.reduce((sum, t) => sum + (t.amount || 0), 0) || 0;
+
+        setStats({
+          totalUsers: usersCount || 0,
+          totalSales,
+          totalDraws: drawsCount || 0,
+          activeTickets: activeTicketsCount || 0
+        });
+
+        const { data: usersList, error: usersListError } = await supabase.from('users').select('*').order('createdAt', { ascending: false });
+        if (usersListError) throw usersListError;
+
+        const { data: drawsList, error: drawsListError } = await supabase.from('draws').select('*').order('drawDate', { ascending: false }).limit(10);
+        if (drawsListError) throw drawsListError;
+
+        setUsers(usersList || []);
+        setDraws(drawsList || []);
+      } catch (err) {
+        console.error('Jonas Loto Center: Admin fetchData error:', err);
+      } finally {
+        setLoading(false);
+      }
     };
 
-    fetchData();
-// ... (rest of useEffect)
+  useEffect(() => {
+    fetchData().catch(err => console.error('Jonas Loto Center: Admin unhandled fetchData error:', err));
   }, []);
 
+  const handleCreateDraw = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const { error } = await supabase.from('draws').insert([{
+        ...newDraw,
+        drawDate: new Date(newDraw.drawDate).toISOString()
+      }]);
+      if (error) throw error;
+      setIsDrawModalOpen(false);
+      fetchData().catch(err => console.error('Jonas Loto Center: Admin error refetching after draw creation:', err));
+    } catch (err) {
+      console.error('Jonas Loto Center: Error creating draw:', err);
+    }
+  };
+
+  const handleDeleteUser = async (uid: string) => {
+    if (!window.confirm('Êtes-vous sûr de vouloir supprimer cet utilisateur ?')) return;
+    try {
+      const { error } = await supabase.from('users').delete().eq('uid', uid);
+      if (error) throw error;
+      setUsers(prev => prev.filter(u => u.uid !== uid));
+    } catch (err) {
+      console.error('Jonas Loto Center: Error deleting user:', err);
+    }
+  };
+
+  const handleUpdateUserBalance = async (uid: string, newBalance: number) => {
+    try {
+      const { error } = await supabase.from('users').update({ balance: newBalance }).eq('uid', uid);
+      if (error) throw error;
+      setUsers(prev => prev.map(u => u.uid === uid ? { ...u, balance: newBalance } : u));
+    } catch (err) {
+      console.error('Jonas Loto Center: Error updating balance:', err);
+    }
+  };
+
   const handleVerify = async (uid: string, status: 'active' | 'rejected') => {
-    const { error } = await supabase.from('users').update({ status }).eq('uid', uid);
-    if (!error) {
+    try {
+      const { error } = await supabase.from('users').update({ status }).eq('uid', uid);
+      if (error) throw error;
       setUsers(prev => prev.map(u => u.uid === uid ? { ...u, status } : u));
       setSelectedUser(null);
+    } catch (err) {
+      console.error('Jonas Loto Center: Error verifying user in Admin:', err);
     }
   };
 
@@ -207,8 +268,21 @@ export default function Admin() {
                     <td className="px-6 py-4 text-xs text-slate-400">{format(new Date(user.createdAt), 'dd/MM/yyyy')}</td>
                     <td className="px-6 py-4">
                       <div className="flex gap-2">
-                        <button className="p-2 text-slate-400 hover:text-primary transition-colors"><Edit2 size={16} /></button>
-                        <button className="p-2 text-slate-400 hover:text-accent transition-colors"><Trash2 size={16} /></button>
+                        <button 
+                          onClick={() => {
+                            const amount = prompt('Entrez le nouveau solde:', user.balance);
+                            if (amount !== null) handleUpdateUserBalance(user.uid, parseFloat(amount));
+                          }}
+                          className="p-2 text-slate-400 hover:text-primary transition-colors"
+                        >
+                          <Edit2 size={16} />
+                        </button>
+                        <button 
+                          onClick={() => handleDeleteUser(user.uid)}
+                          className="p-2 text-slate-400 hover:text-accent transition-colors"
+                        >
+                          <Trash2 size={16} />
+                        </button>
                       </div>
                     </td>
                   </tr>
@@ -271,6 +345,89 @@ export default function Admin() {
               </tbody>
             </table>
           </div>
+        </div>
+      )}
+
+      {/* New Draw Modal */}
+      {isDrawModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-white dark:bg-dark-surface rounded-[2.5rem] w-full max-w-md overflow-hidden shadow-2xl"
+          >
+            <div className="p-8 border-b border-slate-100 dark:border-dark-border flex items-center justify-between">
+              <h3 className="text-2xl font-black text-slate-900 dark:text-white uppercase italic tracking-tighter">Nouveau Tirage</h3>
+              <button onClick={() => setIsDrawModalOpen(false)} className="p-2 hover:bg-slate-100 rounded-full dark:hover:bg-dark-bg">
+                <PlusCircle className="rotate-45 text-slate-400" size={24} />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateDraw} className="p-8 space-y-6">
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Type de Tirage</label>
+                <select 
+                  className="input-field"
+                  value={newDraw.type}
+                  onChange={(e) => setNewDraw({...newDraw, type: e.target.value})}
+                  required
+                >
+                  <option value="New York">New York</option>
+                  <option value="Florida">Florida</option>
+                  <option value="Georgia">Georgia</option>
+                </select>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Numéros Gagnants</label>
+                <div className="flex gap-2">
+                  {['first', 'second', 'third'].map((pos) => (
+                    <input 
+                      key={pos}
+                      type="text"
+                      maxLength={2}
+                      placeholder="00"
+                      className="input-field text-center font-black text-xl"
+                      value={(newDraw.winningNumbers as any)[pos]}
+                      onChange={(e) => {
+                        setNewDraw({
+                          ...newDraw, 
+                          winningNumbers: { ...newDraw.winningNumbers, [pos]: e.target.value.replace(/\D/g, '') }
+                        });
+                      }}
+                      required
+                    />
+                  ))}
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Jackpot (HTG)</label>
+                <input 
+                  type="number"
+                  className="input-field"
+                  value={newDraw.jackpot}
+                  onChange={(e) => setNewDraw({...newDraw, jackpot: parseFloat(e.target.value)})}
+                  required
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Date et Heure</label>
+                <input 
+                  type="datetime-local"
+                  className="input-field"
+                  value={newDraw.drawDate}
+                  onChange={(e) => setNewDraw({...newDraw, drawDate: e.target.value})}
+                  required
+                />
+              </div>
+
+              <button type="submit" className="w-full btn-primary py-4 mt-4">
+                Enregistrer le Tirage
+              </button>
+            </form>
+          </motion.div>
         </div>
       )}
 
@@ -365,7 +522,10 @@ export default function Admin() {
             <h3 className="text-xl font-black text-slate-900 dark:text-white uppercase italic tracking-tighter flex items-center gap-2">
               <History className="text-primary dark:text-secondary" /> Gestion des Tirages
             </h3>
-            <button className="btn-primary py-2 px-4 text-xs flex items-center gap-2">
+            <button 
+              onClick={() => setIsDrawModalOpen(true)}
+              className="btn-primary py-2 px-4 text-xs flex items-center gap-2"
+            >
               <PlusCircle size={16} /> Nouveau Tirage
             </button>
           </div>
@@ -391,7 +551,7 @@ export default function Admin() {
                     </td>
                     <td className="px-6 py-4">
                       <div className="flex gap-1">
-                        {draw.numbers.map((n: string, i: number) => (
+                        {draw.winningNumbers && Object.values(draw.winningNumbers).map((n: any, i: number) => (
                           <span key={i} className="w-6 h-6 bg-slate-900 text-white rounded-full flex items-center justify-center text-[10px] font-black dark:bg-slate-800">{n}</span>
                         ))}
                       </div>
@@ -402,7 +562,7 @@ export default function Admin() {
                         <CheckCircle2 size={12} /> {draw.status}
                       </span>
                     </td>
-                    <td className="px-6 py-4 text-xs text-slate-400">{format(new Date(draw.date), 'dd/MM HH:mm')}</td>
+                    <td className="px-6 py-4 text-xs text-slate-400">{format(new Date(draw.drawDate), 'dd/MM HH:mm')}</td>
                     <td className="px-6 py-4">
                       <div className="flex gap-2">
                         <button className="p-2 text-slate-400 hover:text-primary transition-colors"><Edit2 size={16} /></button>

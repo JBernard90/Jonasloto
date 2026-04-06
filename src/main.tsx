@@ -12,8 +12,22 @@ window.onerror = (message, source, lineno, colno, error) => {
 };
 
 window.onunhandledrejection = (event) => {
-  console.error('Jonas Loto Center: Unhandled Promise Rejection:', event.reason);
+  console.error('Jonas Loto Center: Global Unhandled Promise Rejection:', {
+    reason: event.reason,
+    promise: event.promise,
+    message: event.reason?.message || 'No message',
+    stack: event.reason?.stack || 'No stack'
+  });
 };
+
+// Register Service Worker for Offline Mode
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js')
+      .then(reg => console.log('Jonas Loto Center: SW Registered', reg))
+      .catch(err => console.error('Jonas Loto Center: SW Registration Failed', err));
+  });
+}
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {

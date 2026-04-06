@@ -34,7 +34,7 @@ export default function OTP() {
     }, 1000);
 
     // Initial OTP send
-    sendOTP();
+    sendOTP().catch(err => console.error('Jonas Loto Center: Error in initial sendOTP:', err));
 
     return () => clearInterval(interval);
   }, []);
@@ -61,19 +61,32 @@ export default function OTP() {
         body: JSON.stringify({ email, code })
       });
 
-      if (!response.ok) throw new Error('Failed to send OTP email');
+      const contentType = response.headers.get('content-type');
+      if (!response.ok || !contentType || !contentType.includes('application/json')) {
+        throw new Error('Le serveur a renvoyé une réponse invalide (Erreur de routage).');
+      }
+
+      const data = await response.json();
+      if (!data.success) throw new Error(data.error || 'Échec de l\'envoi de l\'e-mail.');
 
     } catch (err: any) {
       console.error('OTP Send Error:', err);
-      setError('Impossible d\'envoyer le code. Veuillez réessayer.');
+      setError(err.message || 'Impossible d\'envoyer le code. Veuillez réessayer.');
     }
   };
 
   const handleResend = async () => {
     setResending(true);
-    await sendOTP();
-    setTimer(600);
-    setResending(false);
+    setError(null);
+    try {
+      await sendOTP();
+      setTimer(600);
+    } catch (err: any) {
+      console.error('Jonas Loto Center: handleResend error:', err);
+      setError(err.message || "Erreur lors du renvoi de l'OTP.");
+    } finally {
+      setResending(false);
+    }
   };
 
   const handleChange = (index: number, value: string) => {
