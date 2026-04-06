@@ -35,6 +35,7 @@ export default function Profile({ user: initialUser }: { user?: any }) {
   const [phone, setPhone] = useState('');
   const [dob, setDob] = useState('');
   const [role, setRole] = useState<'client' | 'agent' | 'supervisor' | 'admin'>('client');
+  const [roleSelected, setRoleSelected] = useState(false);
   const [idType, setIdType] = useState<'passport' | 'license' | 'cin'>('cin');
   const [idNumber, setIdNumber] = useState('');
   const [idPhotoFront, setIdPhotoFront] = useState<File | null>(null);
@@ -517,11 +518,68 @@ export default function Profile({ user: initialUser }: { user?: any }) {
         </div>
 
         <div className="card p-8 md:p-10">
-          <form onSubmit={handleAuth} className="space-y-6">
-            {authMode === 'signup' && (
-              <>
-                <div className="space-y-1">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">{t('full_name')}</label>
+          {authMode === 'signup' && !roleSelected ? (
+            <div className="space-y-8">
+              <div className="text-center">
+                <h3 className="text-xl font-black text-slate-900 dark:text-white uppercase italic tracking-tight mb-2">
+                  {user && !userData ? "Finalisez votre inscription" : "Choisissez votre rôle"}
+                </h3>
+                <p className="text-sm text-slate-500">
+                  {user && !userData 
+                    ? "Veuillez choisir votre rôle pour continuer." 
+                    : "Sélectionnez le type de compte que vous souhaitez créer."}
+                </p>
+              </div>
+              
+              <div className="grid grid-cols-1 gap-4">
+                {[
+                  { id: 'client', label: 'Client', desc: 'Jouez et gagnez des prix', icon: UserIcon },
+                  { id: 'agent', label: 'Agent (Vendeur)', desc: 'Vendez des billets et gagnez des commissions', icon: Smartphone },
+                  { id: 'supervisor', label: 'Superviseur', desc: 'Gérez une équipe d\'agents', icon: ShieldCheck },
+                  { id: 'admin', label: 'Administrateur', desc: 'Gestion complète du système', icon: Settings },
+                ].map((r) => (
+                  <button
+                    key={r.id}
+                    onClick={() => {
+                      setRole(r.id as any);
+                      setRoleSelected(true);
+                    }}
+                    className="flex items-center gap-4 p-4 rounded-2xl border-2 border-slate-100 hover:border-primary hover:bg-primary/5 transition-all text-left group dark:border-dark-border dark:hover:border-secondary dark:hover:bg-secondary/5"
+                  >
+                    <div className="w-12 h-12 rounded-xl bg-slate-50 flex items-center justify-center text-slate-400 group-hover:bg-white group-hover:text-primary transition-all dark:bg-dark-bg dark:group-hover:bg-dark-surface dark:group-hover:text-secondary">
+                      <r.icon size={24} />
+                    </div>
+                    <div>
+                      <div className="font-black text-slate-900 dark:text-white uppercase tracking-tight">{r.label}</div>
+                      <div className="text-xs text-slate-500">{r.desc}</div>
+                    </div>
+                    <ChevronRight size={20} className="ml-auto text-slate-300 group-hover:text-primary dark:group-hover:text-secondary" />
+                  </button>
+                ))}
+              </div>
+
+              <button 
+                onClick={() => setAuthMode('login')}
+                className="w-full py-4 text-sm font-bold text-slate-500 hover:text-primary transition-all"
+              >
+                Déjà un compte ? Se connecter
+              </button>
+            </div>
+          ) : (
+            <form onSubmit={handleAuth} className="space-y-6">
+              {authMode === 'signup' && (
+                <>
+                  {roleSelected && (
+                    <button 
+                      type="button"
+                      onClick={() => setRoleSelected(false)}
+                      className="flex items-center gap-2 text-[10px] font-black text-primary uppercase tracking-widest mb-4 hover:underline dark:text-secondary"
+                    >
+                      <X size={14} /> Changer de rôle ({role})
+                    </button>
+                  )}
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">{t('full_name')}</label>
                   <div className="relative">
                     <UserIcon size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
                     <input 
@@ -547,21 +605,6 @@ export default function Profile({ user: initialUser }: { user?: any }) {
                       required
                     />
                   </div>
-                </div>
-
-                <div className="space-y-1">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Rôle de l'utilisateur</label>
-                  <select 
-                    value={role}
-                    onChange={(e) => setRole(e.target.value as any)}
-                    className="input-field"
-                    required
-                  >
-                    <option value="client">Client</option>
-                    <option value="agent">Agent (Vendeur)</option>
-                    <option value="supervisor">Superviseur</option>
-                    <option value="admin">Administrateur</option>
-                  </select>
                 </div>
 
                 <div className="space-y-1">
@@ -690,18 +733,21 @@ export default function Profile({ user: initialUser }: { user?: any }) {
               )}
             </button>
           </form>
+          )}
 
-          {!user && (
+          {(!user || (user && !userData)) && (authMode === 'login' || roleSelected) && (
             <>
-              <div className="relative my-10">
-                <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-slate-100 dark:border-dark-border"></div></div>
-                <div className="relative flex justify-center text-[10px] font-black uppercase tracking-widest"><span className="bg-white px-4 text-slate-300 dark:bg-dark-surface">Ou</span></div>
-              </div>
+              {authMode === 'login' && (
+                <div className="relative mb-8">
+                  <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-slate-100 dark:border-dark-border"></div></div>
+                  <div className="relative flex justify-center text-[10px] font-black uppercase tracking-widest"><span className="bg-white px-4 text-slate-300 dark:bg-dark-surface">Ou</span></div>
+                </div>
+              )}
 
               <button 
                 onClick={handleGoogleLogin}
                 disabled={loading}
-                className="w-full py-4 rounded-xl border border-slate-200 text-slate-600 font-bold hover:bg-slate-50 transition-all flex items-center justify-center gap-3 dark:border-dark-border dark:text-slate-400 dark:hover:bg-dark-bg"
+                className="w-full py-4 rounded-xl border border-slate-200 text-slate-600 font-bold hover:bg-slate-50 transition-all flex items-center justify-center gap-3 dark:border-dark-border dark:text-slate-400 dark:hover:bg-dark-bg mb-6"
               >
                 <svg className="w-5 h-5" viewBox="0 0 24 24">
                   <path fill="currentColor" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
@@ -714,12 +760,17 @@ export default function Profile({ user: initialUser }: { user?: any }) {
             </>
           )}
 
-          <button 
-            onClick={() => setAuthMode(authMode === 'login' ? 'signup' : 'login')}
-            className="w-full py-4 rounded-xl border border-slate-200 text-slate-600 font-bold hover:bg-slate-50 transition-all flex items-center justify-center gap-2 dark:border-dark-border dark:text-slate-400 dark:hover:bg-dark-bg"
-          >
-            {authMode === 'login' ? t('signup') : t('login')}
-          </button>
+          {(!user || (user && !userData)) && (
+            <button 
+              onClick={() => {
+                setAuthMode(authMode === 'login' ? 'signup' : 'login');
+                setRoleSelected(false);
+              }}
+              className="w-full py-4 rounded-xl border border-slate-200 text-slate-600 font-bold hover:bg-slate-50 transition-all flex items-center justify-center gap-2 dark:border-dark-border dark:text-slate-400 dark:hover:bg-dark-bg"
+            >
+              {authMode === 'login' ? t('signup') : t('login')}
+            </button>
+          )}
           
           <p className="text-center mt-8 text-[10px] text-slate-400 uppercase tracking-widest font-bold">
             {t('any_email_hint')}
