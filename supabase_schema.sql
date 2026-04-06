@@ -62,7 +62,89 @@ ALTER TABLE public.otps ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Users can manage their own otps" ON public.otps
     FOR ALL USING (auth.uid() = "userId");
 
--- 3. Storage Bucket for Verification Documents
+-- 3. Draws Table
+CREATE TABLE IF NOT EXISTS public.draws (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    type TEXT NOT NULL, -- 'New York', 'Florida', 'Georgia'
+    "winningNumbers" JSONB NOT NULL, -- { first: '12', second: '34', third: '56' }
+    jackpot NUMERIC DEFAULT 0,
+    status TEXT DEFAULT 'active' CHECK (status IN ('active', 'completed')),
+    "drawDate" TIMESTAMPTZ NOT NULL,
+    "createdAt" TIMESTAMPTZ DEFAULT now()
+);
+
+-- Enable RLS on draws
+ALTER TABLE public.draws ENABLE ROW LEVEL SECURITY;
+
+-- Policies for draws
+CREATE POLICY "Anyone can view draws" ON public.draws
+    FOR SELECT USING (true);
+
+CREATE POLICY "Admins can manage draws" ON public.draws
+    FOR ALL USING (
+        EXISTS (
+            SELECT 1 FROM public.users 
+            WHERE uid = auth.uid() AND role = 'admin'
+        )
+    );
+
+-- 4. Tickets Table
+CREATE TABLE IF NOT EXISTS public.tickets (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    "userId" UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+    borlette TEXT NOT NULL,
+    lotos JSONB NOT NULL,
+    entries JSONB NOT NULL,
+    amount NUMERIC NOT NULL,
+    status TEXT DEFAULT 'active' CHECK (status IN ('active', 'won', 'lost', 'pending')),
+    "createdAt" TIMESTAMPTZ DEFAULT now()
+);
+
+-- Enable RLS on tickets
+ALTER TABLE public.tickets ENABLE ROW LEVEL SECURITY;
+
+-- Policies for tickets
+CREATE POLICY "Users can view own tickets" ON public.tickets
+    FOR SELECT USING (auth.uid() = "userId");
+
+CREATE POLICY "Users can insert own tickets" ON public.tickets
+    FOR INSERT WITH CHECK (auth.uid() = "userId");
+
+CREATE POLICY "Admins can view all tickets" ON public.tickets
+    FOR SELECT USING (
+        EXISTS (
+            SELECT 1 FROM public.users 
+            WHERE uid = auth.uid() AND role = 'admin'
+        )
+    );
+
+-- 5. Transactions Table
+CREATE TABLE IF NOT EXISTS public.transactions (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    "userId" UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+    amount NUMERIC NOT NULL,
+    type TEXT NOT NULL CHECK (type IN ('deposit', 'withdrawal', 'purchase', 'win')),
+    status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'completed', 'failed')),
+    description TEXT,
+    "createdAt" TIMESTAMPTZ DEFAULT now()
+);
+
+-- Enable RLS on transactions
+ALTER TABLE public.transactions ENABLE ROW LEVEL SECURITY;
+
+-- Policies for transactions
+CREATE POLICY "Users can view own transactions" ON public.transactions
+    FOR SELECT USING (auth.uid() = "userId");
+
+CREATE POLICY "Admins can view all transactions" ON public.transactions
+    FOR SELECT USING (
+        EXISTS (
+            SELECT 1 FROM public.users 
+            WHERE uid = auth.uid() AND role = 'admin'
+        )
+    );
+
+-- 6. Storage Bucket for Verification Documents
 -- Note: You must create the bucket 'verification-docs' manually in the Supabase Dashboard
 -- and then apply these policies.
 
