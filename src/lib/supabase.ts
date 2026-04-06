@@ -8,7 +8,15 @@ if (!supabaseUrl || !supabaseAnonKey) {
 }
 
 // Ensure we don't pass empty strings if possible, or at least handle the error
+// FIX: Disable session persistence - user must login manually each time
 export const supabase = createClient(
   supabaseUrl || 'https://placeholder.supabase.co', 
-  supabaseAnonKey || 'placeholder'
+  supabaseAnonKey || 'placeholder',
+  {
+    auth: {
+      persistSession: false, // Don't save session to localStorage
+      autoRefreshToken: false, // Don't auto-refresh tokens
+      detectSessionInUrl: false // Don't detect session in URL
+    }
+  }
 );
