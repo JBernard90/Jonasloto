@@ -27,10 +27,32 @@ export default function App() {
   const [envError, setEnvError] = useState(false);
 
   useEffect(() => {
-    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || (typeof process !== 'undefined' ? process.env.VITE_SUPABASE_URL : undefined);
-    const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || (typeof process !== 'undefined' ? process.env.VITE_SUPABASE_ANON_KEY : undefined);
+    console.log('Jonas Loto Center: App component mounted');
+    
+    let supabaseUrl: string | undefined;
+    let supabaseAnonKey: string | undefined;
+
+    try {
+      supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+      
+      if (!supabaseUrl && typeof process !== 'undefined') {
+        supabaseUrl = process.env.VITE_SUPABASE_URL;
+      }
+      if (!supabaseAnonKey && typeof process !== 'undefined') {
+        supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY;
+      }
+    } catch (e) {
+      console.error('Jonas Loto Center: Error accessing env vars:', e);
+    }
+
+    console.log('Jonas Loto Center: Supabase Config Check:', { 
+      hasUrl: !!supabaseUrl, 
+      hasKey: !!supabaseAnonKey
+    });
 
     if (!supabaseUrl || !supabaseAnonKey) {
+      console.warn('Jonas Loto Center: Supabase configuration missing!');
       setEnvError(true);
       setLoading(false);
       return;

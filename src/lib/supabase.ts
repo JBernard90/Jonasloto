@@ -7,4 +7,8 @@ if (!supabaseUrl || !supabaseAnonKey) {
   console.error('Missing Supabase configuration. Please check your environment variables.');
 }
 
-export const supabase = createClient(supabaseUrl || '', supabaseAnonKey || '');
+// Ensure we don't pass empty strings if possible, or at least handle the error
+export const supabase = createClient(
+  supabaseUrl || 'https://placeholder.supabase.co', 
+  supabaseAnonKey || 'placeholder'
+);

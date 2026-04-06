@@ -34,7 +34,8 @@ export default function POS() {
   const [lastTicket, setLastTicket] = useState<any>(null);
   const [recentSales, setRecentSales] = useState<any[]>([]);
   const [step, setStep] = useState(1);
-  const [sessionTotal, setSessionTotal] = useState(0);
+  const [todaySales, setTodaySales] = useState(0);
+  const [todayTicketsCount, setTodayTicketsCount] = useState(0);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -47,7 +48,8 @@ export default function POS() {
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'tickets' }, (payload) => {
         if (payload.new.agentId === user?.id) {
           setRecentSales(prev => [payload.new, ...prev].slice(0, 5));
-          setSessionTotal(prev => prev + (payload.new.amount || 0));
+          setTodaySales(prev => prev + (payload.new.amount || 0));
+          setTodayTicketsCount(prev => prev + 1);
         }
       })
       .subscribe();
@@ -69,14 +71,15 @@ export default function POS() {
 
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    const { data: todaySales } = await supabase
+    const { data: todayData, count } = await supabase
       .from('tickets')
-      .select('amount')
+      .select('amount', { count: 'exact' })
       .eq('agentId', agentId)
       .gte('createdAt', today.toISOString());
     
-    const total = todaySales?.reduce((sum, s) => sum + (s.amount || 0), 0) || 0;
-    setSessionTotal(total);
+    const total = todayData?.reduce((sum, s) => sum + (s.amount || 0), 0) || 0;
+    setTodaySales(total);
+    setTodayTicketsCount(count || 0);
   };
 
   const handleBorletteSelect = (type: string) => {
@@ -372,7 +375,7 @@ export default function POS() {
               <h3 className="text-xl font-black text-slate-900 dark:text-white uppercase italic tracking-tighter flex items-center gap-2">
                 <History className="text-primary dark:text-secondary" /> Ventes Récentes
               </h3>
-              <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Session: {sessionTotal.toLocaleString()} HTG</div>
+              <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Session: {todaySales.toLocaleString()} HTG</div>
             </div>
             
             <div className="space-y-4">
@@ -404,6 +407,27 @@ export default function POS() {
 
         {/* Sidebar Info */}
         <div className="lg:col-span-1 space-y-8">
+          {/* Performance Metrics */}
+          <div className="card p-8 border-2 border-primary/10 dark:border-secondary/10 bg-gradient-to-br from-white to-slate-50 dark:from-dark-surface dark:to-dark-bg">
+            <h3 className="text-xl font-black uppercase italic tracking-tighter mb-8 flex items-center gap-2 text-slate-900 dark:text-white">
+              <Zap className="text-primary dark:text-secondary" /> Performance du Jour
+            </h3>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="p-4 bg-white rounded-2xl border border-slate-100 shadow-sm dark:bg-dark-bg dark:border-dark-border">
+                <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Ventes</div>
+                <div className="text-xl font-black text-primary dark:text-secondary tracking-tighter">
+                  {todaySales.toLocaleString()} <span className="text-[10px]">HTG</span>
+                </div>
+              </div>
+              <div className="p-4 bg-white rounded-2xl border border-slate-100 shadow-sm dark:bg-dark-bg dark:border-dark-border">
+                <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Billets</div>
+                <div className="text-xl font-black text-slate-900 dark:text-white tracking-tighter">
+                  {todayTicketsCount}
+                </div>
+              </div>
+            </div>
+          </div>
+
           <div className="card bg-slate-900 text-white border-none p-8 dark:bg-black">
             <h3 className="text-xl font-black uppercase italic tracking-tighter mb-8 flex items-center gap-2">
               <DollarSign className="text-secondary" /> Vérifier un Billet
