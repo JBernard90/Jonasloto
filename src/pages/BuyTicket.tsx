@@ -1,200 +1,408 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
+import { motion, AnimatePresence } from 'motion/react';
+import { 
+  Ticket, History, Star, Search, 
+  Filter, ChevronRight, ArrowRight, TrendingUp,
+  Zap, ShieldCheck, Smartphone, CheckCircle2,
+  Trash2, PlusCircle, DollarSign, Dices, AlertCircle,
+  Globe
+} from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { motion } from 'motion/react';
-import { ShoppingCart, AlertCircle, CheckCircle2 } from 'lucide-react';
-import { LOTTERY_CONFIG } from '../constants/lottery';
+import { useNavigate } from 'react-router-dom';
 
-export default function BuyTicket({ user }: { user: any }) {
+const LOTTERY_CONFIG: Record<string, string[]> = {
+  'New York': ['Borlette', 'Loto 3', 'Loto 4', 'Loto 5', 'Marriage'],
+  'Florida': ['Borlette', 'Loto 3', 'Loto 4', 'Loto 5', 'Marriage'],
+  'Georgia': ['Borlette', 'Loto 3', 'Loto 4', 'Loto 5', 'Marriage'],
+};
+
+const LOTO_DIGITS: Record<string, number> = {
+  'Borlette': 2,
+  'Loto 3': 3,
+  'Loto 4': 4,
+  'Loto 5': 5,
+  'Marriage': 4, // 2 numbers of 2 digits
+};
+
+export default function BuyTicket({ user: initialUser }: { user?: any }) {
   const { t } = useTranslation();
-  const [selectedLottery, setSelectedLottery] = useState('');
-  const [numbers, setNumbers] = useState(['', '', '']);
-  const [amount, setAmount] = useState(100);
+  const navigate = useNavigate();
+  const [user, setUser] = useState<any>(initialUser || null);
+  const [userData, setUserData] = useState<any>(null);
+  const [borlette, setBorlette] = useState('New York');
+  const [selectedLotos, setSelectedLotos] = useState<string[]>([]);
+  const [lotoEntries, setLotoEntries] = useState<Record<string, { numbers: string[], amounts: number[] }>>({});
   const [loading, setLoading] = useState(false);
-  const [success, setSuccess] = useState(false);
-  const [error, setError] = useState('');
+  const [step, setStep] = useState(1);
+  const [error, setError] = useState<string | null>(null);
 
-  if (!user) {
-    return (
-      <div className="max-w-md mx-auto">
-        <div className="bg-white p-8 rounded-3xl shadow-sm border border-gray-100 text-center">
-          <AlertCircle size={48} className="mx-auto text-accent mb-4" />
-          <h1 className="text-2xl font-black text-gray-900 mb-2">Connexion requise</h1>
-          <p className="text-gray-500 mb-6">Veuillez vous connecter pour acheter un billet.</p>
-          <a href="/profile" className="inline-block bg-primary text-white px-6 py-3 rounded-xl font-bold hover:bg-primary-dark transition-colors">
-            Se connecter
-          </a>
-        </div>
-      </div>
-    );
-  }
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setUser(session?.user ?? null);
+      if (session?.user) fetchUserData(session.user.id);
+    });
+  }, []);
 
-  const handleBuy = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
+  const fetchUserData = async (uid: string) => {
+    const { data } = await supabase.from('users').select('*').eq('uid', uid).single();
+    if (data) setUserData(data);
+  };
+
+  const toggleLoto = (loto: string) => {
+    setSelectedLotos(prev => {
+      const isSelected = prev.includes(loto);
+      const next = isSelected ? prev.filter(l => l !== loto) : [...prev, loto];
+      
+      if (!isSelected) {
+        setLotoEntries(entries => ({
+          ...entries,
+          [loto]: { numbers: [''], amounts: [5] }
+        }));
+      } else {
+        const newEntries = { ...lotoEntries };
+        delete newEntries[loto];
+        setLotoEntries(newEntries);
+      }
+      
+      return next;
+    });
+  };
+
+  const updateLotoEntry = (loto: string, index: number, field: 'numbers' | 'amounts', value: any) => {
+    setLotoEntries(prev => {
+      const entry = { ...prev[loto] };
+      if (field === 'numbers') {
+        entry.numbers[index] = value.replace(/\D/g, '');
+      } else {
+        entry.amounts[index] = Number(value);
+      }
+      return { ...prev, [loto]: entry };
+    });
+  };
+
+  const addLineToLoto = (loto: string) => {
+    setLotoEntries(prev => {
+      const entry = { ...prev[loto] };
+      entry.numbers.push('');
+      entry.amounts.push(5);
+      return { ...prev, [loto]: entry };
+    });
+  };
+
+  const removeLineFromLoto = (loto: string, index: number) => {
+    setLotoEntries(prev => {
+      const entry = { ...prev[loto] };
+      if (entry.numbers.length > 1) {
+        entry.numbers.splice(index, 1);
+        entry.amounts.splice(index, 1);
+      }
+      return { ...prev, [loto]: entry };
+    });
+  };
+
+  const totalAmount = (Object.values(lotoEntries) as any[]).reduce((sum: number, entry: any) => {
+    return sum + (entry.amounts as number[]).reduce((s, a) => s + (a || 0), 0);
+  }, 0);
+
+  const generateRandomNumbers = (loto: string) => {
+    const digits = LOTO_DIGITS[loto] || 2;
+    setLotoEntries(prev => {
+      const entry = { ...prev[loto] };
+      entry.numbers = entry.numbers.map(() => 
+        Math.floor(Math.random() * Math.pow(10, digits)).toString().padStart(digits, '0')
+      );
+      return { ...prev, [loto]: entry };
+    });
+  };
+
+  const handlePurchase = async () => {
+    if (!user) {
+      navigate('/profile');
+      return;
+    }
+
+    if (userData.balance < totalAmount) {
+      setError(t('insufficient_balance'));
+      return;
+    }
+
     setLoading(true);
+    setError(null);
 
     try {
-      if (!selectedLottery || numbers.some(n => !n)) {
-        throw new Error('Veuillez remplir tous les champs');
-      }
-
-      const { error } = await supabase
+      // 1. Create Ticket
+      const { data: ticket, error: ticketError } = await supabase
         .from('tickets')
         .insert({
           userId: user.id,
-          lottery: selectedLottery,
-          numbers,
-          amount,
-          status: 'pending',
-          createdAt: new Date().toISOString()
+          borlette,
+          lotos: selectedLotos,
+          entries: lotoEntries,
+          amount: totalAmount,
+          status: 'active'
+        })
+        .select()
+        .single();
+
+      if (ticketError) throw ticketError;
+
+      // 2. Create Transaction
+      const { error: txError } = await supabase
+        .from('transactions')
+        .insert({
+          userId: user.id,
+          amount: totalAmount,
+          type: 'purchase',
+          status: 'completed',
+          description: `Achat Billet ${borlette} #${ticket.id.slice(0, 8)}`
         });
 
-      if (error) throw error;
+      if (txError) throw txError;
 
-      setSuccess(true);
-      setSelectedLottery('');
-      setNumbers(['', '', '']);
-      setAmount(100);
+      // 3. Update User Balance
+      const { error: balanceError } = await supabase
+        .from('users')
+        .update({ balance: userData.balance - totalAmount })
+        .eq('uid', user.id);
 
-      setTimeout(() => setSuccess(false), 3000);
+      if (balanceError) throw balanceError;
+
+      // Success
+      setStep(3);
     } catch (err: any) {
-      setError(err.message || 'Une erreur est survenue');
+      setError(err.message);
     } finally {
       setLoading(false);
     }
   };
 
-  const lotteries = Object.keys(LOTTERY_CONFIG);
-
   return (
-    <div className="max-w-2xl mx-auto">
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="bg-white p-8 rounded-3xl shadow-sm border border-gray-100"
-      >
-        <div className="flex items-center gap-3 mb-6">
-          <ShoppingCart size={32} className="text-primary" />
-          <div>
-            <h1 className="text-2xl font-black text-gray-900">Acheter un Billet</h1>
-            <p className="text-gray-500 text-sm">Choisissez votre loterie et vos numéros</p>
-          </div>
-        </div>
+    <div className="max-w-4xl mx-auto px-4 py-12">
+      <div className="text-center mb-12">
+        <h1 className="text-4xl md:text-5xl font-black text-primary dark:text-secondary uppercase italic tracking-tighter mb-2">
+          {t('buy_ticket')}
+        </h1>
+        <p className="text-slate-500 dark:text-slate-400 font-medium">Choisissez vos numéros et tentez de remporter le jackpot !</p>
+      </div>
 
-        {success && (
-          <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-xl flex items-center gap-3">
-            <CheckCircle2 size={24} className="text-green-600" />
-            <div>
-              <p className="text-green-900 font-bold">Billet acheté avec succès!</p>
-              <p className="text-green-700 text-sm">Votre billet a été créé. Attendez le prochain tirage!</p>
-            </div>
-          </div>
-        )}
-
-        {error && (
-          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl">
-            <p className="text-red-600 text-sm font-bold">{error}</p>
-          </div>
-        )}
-
-        <form onSubmit={handleBuy} className="space-y-6">
-          <div>
-            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-1 block mb-2">
-              Sélectionner une Loterie
-            </label>
-            <select
-              value={selectedLottery}
-              onChange={(e) => setSelectedLottery(e.target.value)}
-              className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-primary focus:outline-none font-bold"
-              required
-            >
-              <option value="">Choisir une loterie...</option>
-              {lotteries.map(lottery => (
-                <option key={lottery} value={lottery}>{lottery}</option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-1 block mb-2">
-              Vos Numéros (3 chiffres)
-            </label>
-            <div className="grid grid-cols-3 gap-4">
-              {numbers.map((num, idx) => (
-                <input
-                  key={idx}
-                  type="text"
-                  maxLength={2}
-                  value={num}
-                  onChange={(e) => {
-                    const newNumbers = [...numbers];
-                    newNumbers[idx] = e.target.value.replace(/\D/g, '');
-                    setNumbers(newNumbers);
-                  }}
-                  className="w-full px-4 py-3 text-center text-2xl font-black bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-primary focus:outline-none"
-                  placeholder="00"
-                  required
-                />
-              ))}
-            </div>
-          </div>
-
-          <div>
-            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-1 block mb-2">
-              Montant (HTG)
-            </label>
-            <input
-              type="number"
-              value={amount}
-              onChange={(e) => setAmount(Number(e.target.value))}
-              className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-primary focus:outline-none font-bold"
-              min="100"
-              step="100"
-              required
-            />
-            <p className="text-[10px] text-gray-400 mt-2">Minimum: 100 HTG</p>
-          </div>
-
-          <div className="bg-primary/5 p-6 rounded-2xl border border-primary/10">
-            <div className="flex justify-between items-center mb-2">
-              <span className="text-gray-600">Montant du billet</span>
-              <span className="text-2xl font-black text-primary">{amount.toLocaleString()} HTG</span>
-            </div>
-            <p className="text-[10px] text-gray-400">Frais de service inclus</p>
-          </div>
-
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full bg-primary text-white py-4 rounded-xl font-bold hover:bg-primary-dark transition-colors shadow-lg shadow-primary/20 disabled:opacity-50 uppercase tracking-wider"
+      <AnimatePresence mode="wait">
+        {step === 1 && (
+          <motion.div
+            key="step1"
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -20 }}
+            className="space-y-8"
           >
-            {loading ? 'Traitement...' : 'Acheter le Billet'}
-          </button>
-        </form>
+            <div className="card">
+              <h2 className="text-xl font-black text-slate-900 dark:text-white uppercase italic tracking-tighter mb-6 flex items-center gap-2">
+                <Globe className="text-primary dark:text-secondary" /> 1. Choisir une Borlette
+              </h2>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {Object.keys(LOTTERY_CONFIG).map(type => (
+                  <button
+                    key={type}
+                    onClick={() => setBorlette(type)}
+                    className={`p-6 rounded-3xl border-2 transition-all text-left group ${
+                      borlette === type 
+                        ? 'border-primary bg-primary/5 dark:border-secondary dark:bg-secondary/5' 
+                        : 'border-slate-100 hover:border-primary/20 dark:border-dark-border dark:hover:border-secondary/20'
+                    }`}
+                  >
+                    <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1 group-hover:text-primary dark:group-hover:text-secondary">Région</div>
+                    <div className={`text-xl font-black uppercase italic ${borlette === type ? 'text-primary dark:text-secondary' : 'text-slate-900 dark:text-white'}`}>
+                      {type}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
 
-        <div className="mt-8 p-6 bg-gray-50 rounded-2xl border border-gray-100">
-          <h3 className="font-black text-gray-900 mb-4">Comment ça marche?</h3>
-          <ol className="space-y-3 text-sm text-gray-600">
-            <li className="flex gap-3">
-              <span className="font-black text-primary shrink-0">1.</span>
-              <span>Choisissez votre loterie préférée</span>
-            </li>
-            <li className="flex gap-3">
-              <span className="font-black text-primary shrink-0">2.</span>
-              <span>Sélectionnez 3 numéros (00-99)</span>
-            </li>
-            <li className="flex gap-3">
-              <span className="font-black text-primary shrink-0">3.</span>
-              <span>Définissez votre mise</span>
-            </li>
-            <li className="flex gap-3">
-              <span className="font-black text-primary shrink-0">4.</span>
-              <span>Attendez le tirage et gagnez!</span>
-            </li>
-          </ol>
-        </div>
-      </motion.div>
+            <div className="card">
+              <h2 className="text-xl font-black text-slate-900 dark:text-white uppercase italic tracking-tighter mb-6 flex items-center gap-2">
+                <Ticket className="text-primary dark:text-secondary" /> 2. Sélectionner les Lotos
+              </h2>
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                {LOTTERY_CONFIG[borlette].map(loto => (
+                  <button
+                    key={loto}
+                    onClick={() => toggleLoto(loto)}
+                    className={`p-4 rounded-2xl border-2 font-black text-xs uppercase tracking-widest transition-all text-center ${
+                      selectedLotos.includes(loto) 
+                        ? 'border-primary bg-primary text-white shadow-lg dark:border-secondary dark:bg-secondary dark:text-primary' 
+                        : 'border-slate-100 hover:border-primary/20 text-slate-500 dark:border-dark-border dark:text-slate-400'
+                    }`}
+                  >
+                    {loto}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {selectedLotos.length > 0 && (
+              <div className="flex justify-end">
+                <button 
+                  onClick={() => setStep(2)}
+                  className="btn-primary flex items-center gap-2 px-10"
+                >
+                  Suivant <ChevronRight size={20} />
+                </button>
+              </div>
+            )}
+          </motion.div>
+        )}
+
+        {step === 2 && (
+          <motion.div
+            key="step2"
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -20 }}
+            className="space-y-8"
+          >
+            <div className="flex items-center justify-between mb-6">
+              <button onClick={() => setStep(1)} className="text-slate-400 font-black uppercase tracking-widest text-xs hover:text-primary transition-all flex items-center gap-2">
+                <ChevronRight size={16} className="rotate-180" /> Retour
+              </button>
+              <div className="px-4 py-1 bg-primary/5 text-primary rounded-full text-[10px] font-black uppercase tracking-widest dark:bg-secondary/5 dark:text-secondary">
+                Borlette: {borlette}
+              </div>
+            </div>
+
+            <div className="space-y-6">
+              {selectedLotos.map(loto => (
+                <div key={loto} className="card border-l-8 border-primary dark:border-secondary">
+                  <div className="flex items-center justify-between mb-6">
+                    <h3 className="text-xl font-black text-primary dark:text-secondary uppercase italic tracking-tighter">{loto}</h3>
+                    <button 
+                      onClick={() => generateRandomNumbers(loto)}
+                      className="text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-primary dark:hover:text-secondary flex items-center gap-1"
+                    >
+                      <Dices size={14} /> Aléatoire
+                    </button>
+                  </div>
+
+                  <div className="space-y-4">
+                    {lotoEntries[loto]?.numbers.map((num, idx) => (
+                      <div key={idx} className="flex flex-col md:flex-row md:items-center gap-4 bg-slate-50 p-4 rounded-2xl border border-slate-100 dark:bg-dark-bg dark:border-dark-border">
+                        <div className="flex items-center gap-4 flex-grow">
+                          <input 
+                            type="text"
+                            maxLength={LOTO_DIGITS[loto]}
+                            value={num}
+                            onChange={(e) => updateLotoEntry(loto, idx, 'numbers', e.target.value)}
+                            className="w-20 h-20 text-center text-3xl font-black bg-white border-2 border-slate-100 rounded-2xl focus:border-primary focus:outline-none transition-all dark:bg-dark-surface dark:border-dark-border dark:text-white dark:focus:border-secondary"
+                            placeholder={"0".repeat(LOTO_DIGITS[loto])}
+                          />
+                          <div className="flex-grow">
+                            <div className="flex flex-wrap gap-2">
+                              {[5, 10, 25, 50, 100].map(val => (
+                                <button
+                                  key={val}
+                                  type="button"
+                                  onClick={() => updateLotoEntry(loto, idx, 'amounts', val)}
+                                  className={`px-3 py-2 rounded-lg border font-black text-[10px] uppercase tracking-widest transition-all ${
+                                    lotoEntries[loto].amounts[idx] === val 
+                                      ? 'bg-slate-900 border-slate-900 text-white dark:bg-secondary dark:border-secondary dark:text-primary' 
+                                      : 'bg-white border-slate-200 text-slate-500 hover:border-slate-300 dark:bg-dark-surface dark:border-dark-border dark:text-slate-400'
+                                  }`}
+                                >
+                                  {val} HTG
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                        
+                        <div className="flex items-center gap-2">
+                          <div className="relative">
+                            <DollarSign size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                            <input 
+                              type="number"
+                              placeholder="HTG"
+                              value={lotoEntries[loto].amounts[idx] || ''}
+                              onChange={(e) => updateLotoEntry(loto, idx, 'amounts', e.target.value)}
+                              className="w-24 pl-8 pr-3 py-3 bg-white border-2 border-slate-100 rounded-xl text-center font-black text-sm focus:border-primary focus:outline-none dark:bg-dark-surface dark:border-dark-border dark:text-white dark:focus:border-secondary"
+                            />
+                          </div>
+                          {lotoEntries[loto].numbers.length > 1 && (
+                            <button 
+                              onClick={() => removeLineFromLoto(loto, idx)}
+                              className="text-accent hover:bg-accent/5 p-2 rounded-lg transition-all"
+                            >
+                              <Trash2 size={20} />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                    <button 
+                      onClick={() => addLineToLoto(loto)}
+                      className="text-[10px] font-black text-primary uppercase tracking-widest hover:underline flex items-center gap-1 dark:text-secondary"
+                    >
+                      <PlusCircle size={14} /> Ajouter une ligne
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="card bg-primary text-white dark:bg-black border-none p-8 flex flex-col md:flex-row md:items-center justify-between gap-6">
+              <div>
+                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Total à payer</div>
+                <div className="text-4xl font-black text-secondary tracking-tighter">{totalAmount.toLocaleString()} HTG</div>
+              </div>
+              
+              <div className="flex flex-col gap-4 w-full md:w-auto">
+                {error && (
+                  <div className="p-3 bg-accent/10 border border-accent/20 rounded-xl flex items-center gap-2 text-accent text-[10px] font-bold uppercase tracking-widest">
+                    <AlertCircle size={14} /> {error}
+                  </div>
+                )}
+                <button 
+                  onClick={handlePurchase}
+                  disabled={loading || totalAmount <= 0}
+                  className="btn-secondary py-4 px-12 text-lg flex items-center justify-center gap-2 disabled:opacity-50"
+                >
+                  {loading ? (
+                    <div className="w-6 h-6 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
+                  ) : (
+                    <>
+                      <ShieldCheck size={24} /> {t('confirm_purchase')}
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        )}
+
+        {step === 3 && (
+          <motion.div
+            key="step3"
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="card text-center py-20 space-y-8"
+          >
+            <div className="w-24 h-24 bg-green-50 text-green-500 rounded-full flex items-center justify-center mx-auto dark:bg-green-500/10">
+              <CheckCircle2 size={64} />
+            </div>
+            <div>
+              <h2 className="text-4xl font-black text-slate-900 dark:text-white uppercase italic tracking-tighter mb-2">Achat Réussi !</h2>
+              <p className="text-slate-500 dark:text-slate-400 font-medium">Votre billet a été enregistré avec succès. Bonne chance !</p>
+            </div>
+            <div className="flex flex-col sm:flex-row gap-4 justify-center">
+              <button onClick={() => navigate('/profile')} className="btn-primary">
+                Voir mes billets
+              </button>
+              <button onClick={() => { setStep(1); setLotoEntries({}); setSelectedLotos([]); }} className="bg-slate-100 text-slate-600 px-8 py-3 rounded-xl font-bold hover:bg-slate-200 transition-all dark:bg-dark-bg dark:text-slate-400">
+                Acheter un autre
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

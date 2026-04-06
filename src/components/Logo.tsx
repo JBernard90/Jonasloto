@@ -1,88 +1,53 @@
 import React from 'react';
 
-interface LogoProps {
-  className?: string;
-  light?: boolean;
-  size?: number;
-}
-
-export default function Logo({ className = "", light = false, size }: LogoProps) {
-  const baseWidth = 200;
-  const baseHeight = 140;
-  const scale = size ? size / 100 : 1;
-
+export default function Logo({ className = "w-10 h-10" }: { className?: string }) {
   return (
-    <div className={`flex flex-col items-center ${className}`}>
-      <div 
-        className="relative flex items-center justify-center overflow-visible"
-        style={{ width: baseWidth * scale, height: baseHeight * scale }}
-      >
-        <svg 
-          viewBox={`0 0 ${baseWidth} ${baseHeight}`} 
-          className="w-full h-full drop-shadow-lg"
-          xmlns="http://www.w3.org/2000/svg"
-        >
-          {/* Blue Arc */}
-          <path 
-            d="M 10 100 A 90 90 0 0 1 190 100" 
-            fill="none" 
-            stroke="#00208F" 
-            strokeWidth="10" 
-            strokeLinecap="round"
-          />
-          
-          {/* Central Emblem Frame (Diamond + Square) */}
-          <g transform="translate(100, 60)">
-            {/* Yellow Diamond */}
-            <rect x="-30" y="-30" width="60" height="60" fill="#FFD700" rx="4" transform="rotate(45)" />
-            {/* Dark Teal Square */}
-            <rect x="-25" y="-25" width="50" height="50" fill="#1A4D4D" rx="4" />
-            
-            {/* JLC Text */}
-            <text 
-              y="10" 
-              textAnchor="middle" 
-              className="font-black italic" 
-              style={{ fontSize: '28px', fill: 'white', letterSpacing: '-1px' }}
-            >
-              JLC
-            </text>
-          </g>
+    <div className={`relative ${className} flex items-center justify-center`}>
+      <svg viewBox="0 0 400 300" className="w-full h-full drop-shadow-md" xmlns="http://www.w3.org/2000/svg">
+        {/* L'arche bleue */}
+        <path 
+          d="M 60 180 A 140 140 0 0 1 340 180" 
+          fill="none" 
+          stroke="#002B95" 
+          strokeWidth="18" 
+          strokeLinecap="round"
+        />
+        
+        {/* Losange central (Fond JLC) */}
+        <path 
+          d="M 200 60 L 260 120 L 200 180 L 140 120 Z" 
+          fill="#006666" 
+          stroke="#FFD700" 
+          strokeWidth="4"
+        />
+        <path 
+          d="M 200 40 L 280 120 L 200 200 L 120 120 Z" 
+          fill="none" 
+          stroke="#FFD700" 
+          strokeWidth="2" 
+          opacity="0.5"
+        />
 
-          {/* JONAS Text (Left) */}
-          <text 
-            x="50" 
-            y="85" 
-            textAnchor="middle" 
-            className="font-black italic" 
-            style={{ fontSize: '20px', fill: '#FFD700', stroke: '#00208F', strokeWidth: '0.5px' }}
-          >
-            JONAS
-          </text>
+        {/* Sigle JLC au centre */}
+        <text x="200" y="145" textAnchor="middle" className="font-black" style={{ fontSize: '50px', fill: '#002B95', stroke: '#FFFFFF', strokeWidth: '2px', paintOrder: 'stroke' }}>
+          JLC
+        </text>
 
-          {/* LOTO Text (Right) */}
-          <text 
-            x="150" 
-            y="85" 
-            textAnchor="middle" 
-            className="font-black italic" 
-            style={{ fontSize: '20px', fill: '#E30613', stroke: '#FFD700', strokeWidth: '0.5px' }}
-          >
-            LOTO
-          </text>
+        {/* JONAS (Gauche) */}
+        <text x="115" y="165" textAnchor="middle" className="font-black italic" style={{ fontSize: '28px', fill: '#E6FF00', stroke: '#002B95', strokeWidth: '1.5px', paintOrder: 'stroke' }}>
+          JONAS
+        </text>
 
-          {/* CENTER Text (Bottom) */}
-          <text 
-            x="100" 
-            y="125" 
-            textAnchor="middle" 
-            className="font-black" 
-            style={{ fontSize: '26px', fill: '#00208F', stroke: '#FFD700', strokeWidth: '0.8px' }}
-          >
-            CENTER
-          </text>
-        </svg>
-      </div>
+        {/* LOTO (Droite) */}
+        <text x="295" y="165" textAnchor="middle" className="font-black italic" style={{ fontSize: '28px', fill: '#FF0000', stroke: '#FFD700', strokeWidth: '1.5px', paintOrder: 'stroke' }}>
+          LOTO
+        </text>
+
+        {/* CENTER (Bas) */}
+        <text x="200" y="225" textAnchor="middle" className="font-black" style={{ fontSize: '48px', fill: '#002B95', stroke: '#FFD700', strokeWidth: '2px', paintOrder: 'stroke' }}>
+          CENTER
+        </text>
+      </svg>
     </div>
   );
 }

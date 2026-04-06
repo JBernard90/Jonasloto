@@ -27,8 +27,8 @@ export default function App() {
   const [envError, setEnvError] = useState(false);
 
   useEffect(() => {
-    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-    const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || (typeof process !== 'undefined' ? process.env.VITE_SUPABASE_URL : undefined);
+    const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || (typeof process !== 'undefined' ? process.env.VITE_SUPABASE_ANON_KEY : undefined);
 
     if (!supabaseUrl || !supabaseAnonKey) {
       setEnvError(true);
@@ -36,90 +36,42 @@ export default function App() {
       return;
     }
 
-    const initializeAuth = async () => {
-      try {
-        const { data: { session }, error } = await supabase.auth.getSession();
-        
-        if (error) {
-          console.error('Auth error:', error);
-          setLoading(false);
-          return;
-        }
-
-        const supabaseUser = session?.user || null;
-        setUser(supabaseUser);
-        
-        if (supabaseUser) {
-          try {
-            const { data: userData } = await supabase
-              .from('users')
-              .select('*')
-              .eq('uid', supabaseUser.id)
-              .single();
-
-            if (userData) {
-              let userRole = userData.role;
-              
-              if (supabaseUser.email === 'jeanbernardpierrelouis@gmail.com' && userRole !== 'admin') {
-                userRole = 'admin';
-              }
-              
-              setRole(userRole);
-              setIsSuspended(userData.status === 'suspended');
-            } else {
-              if (supabaseUser.email === 'jeanbernardpierrelouis@gmail.com') {
-                setRole('admin');
-              } else {
-                setRole('client');
-              }
-            }
-          } catch (dbError) {
-            console.error('Database error:', dbError);
-            setRole(supabaseUser.email === 'jeanbernardpierrelouis@gmail.com' ? 'admin' : 'client');
-          }
-        } else {
-          setRole(null);
-          setIsSuspended(false);
-        }
-        setLoading(false);
-      } catch (err) {
-        console.error('Initialization error:', err);
-        setLoading(false);
-      }
-    };
-
-    initializeAuth();
-
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       const supabaseUser = session?.user || null;
       setUser(supabaseUser);
       
-      if (supabaseUser && event === 'SIGNED_IN') {
-        try {
-          const { data: userData } = await supabase
-            .from('users')
-            .select('*')
-            .eq('uid', supabaseUser.id)
-            .single();
+      if (supabaseUser) {
+        const { data: userData, error } = await supabase
+          .from('users')
+          .select('*')
+          .eq('uid', supabaseUser.id)
+          .single();
 
-          if (userData) {
-            let userRole = userData.role;
-            if (supabaseUser.email === 'jeanbernardpierrelouis@gmail.com' && userRole !== 'admin') {
-              userRole = 'admin';
-            }
-            setRole(userRole);
-            setIsSuspended(userData.status === 'suspended');
-          } else {
-            setRole(supabaseUser.email === 'jeanbernardpierrelouis@gmail.com' ? 'admin' : 'client');
+        if (userData) {
+          let userRole = userData.role;
+          
+          // Force admin role for the owner email if not already set
+          const adminEmail = import.meta.env.VITE_ADMIN_EMAIL;
+          if (supabaseUser.email === adminEmail && userRole !== 'admin') {
+            userRole = 'admin';
           }
-        } catch (err) {
-          console.error('Error fetching user data:', err);
-          setRole(supabaseUser.email === 'jeanbernardpierrelouis@gmail.com' ? 'admin' : 'client');
+          
+          setRole(userRole);
+          setIsSuspended(userData.status === 'suspended');
+        } else {
+          // If document doesn't exist yet (first login)
+          const adminEmail = import.meta.env.VITE_ADMIN_EMAIL;
+          if (supabaseUser.email === adminEmail) {
+            setRole('admin');
+          } else {
+            setRole('client');
+          }
         }
-      } else if (event === 'SIGNED_OUT') {
+      } else {
         setRole(null);
         setIsSuspended(false);
       }
+      setLoading(false);
     });
 
     return () => subscription.unsubscribe();
@@ -134,7 +86,7 @@ export default function App() {
           </div>
           <h1 className="text-2xl font-black text-gray-900 mb-2 italic uppercase tracking-tight">Configuration Requise</h1>
           <p className="text-gray-500 mb-6 leading-relaxed">
-            Les variables d'environnement Supabase sont manquantes. Veuillez les configurer dans le menu Settings.
+            Les variables d'environnement Supabase sont manquantes. Veuillez les configurer dans le menu <strong>Settings</strong> de Google AI Studio.
           </p>
           <div className="space-y-4 text-left bg-gray-50 p-4 rounded-xl border border-gray-100 text-sm font-mono">
             <div>VITE_SUPABASE_URL</div>
@@ -181,12 +133,13 @@ export default function App() {
             <Routes>
               <Route path="/" element={<Home />} />
               <Route path="/results" element={<Results />} />
-              <Route path="/buy" element={<BuyTicket user={user} />} />
+              <Route path="/buy-ticket" element={<BuyTicket user={user} />} />
               <Route path="/profile" element={<Profile user={user} />} />
               <Route path="/otp" element={<OTP />} />
               <Route path="/contact" element={<Contact />} />
               <Route path="/rules" element={<Rules />} />
               
+              {/* Protected Routes */}
               <Route 
                 path="/admin/*" 
                 element={role === 'admin' ? <Admin /> : <Navigate to="/" />} 

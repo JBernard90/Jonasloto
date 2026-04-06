@@ -1,52 +1,42 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { supabase } from '../lib/supabase';
 import { motion } from 'motion/react';
-import { Trophy, ArrowRight, Star, ShieldCheck, Zap, Monitor } from 'lucide-react';
+import { 
+  Ticket, History, Shield, LayoutDashboard, 
+  Settings, HelpCircle, Mail, Phone, MapPin, 
+  Facebook, Twitter, Instagram, Youtube, Globe,
+  Zap, ShieldCheck, Smartphone, TrendingUp,
+  ChevronRight, ArrowRight, Star
+} from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { format, parseISO } from 'date-fns';
-import { fr, enUS } from 'date-fns/locale';
-import Logo from '../components/Logo';
-
-interface Draw {
-  id: string;
-  type: string;
-  date: string;
-  numbers: string[];
-  jackpot: number;
-}
+import { supabase } from '../lib/supabase';
+import { format } from 'date-fns';
+import { fr } from 'date-fns/locale';
 
 export default function Home() {
-  const { t, i18n } = useTranslation();
-  const [recentDraws, setRecentDraws] = useState<Draw[]>([]);
+  const { t } = useTranslation();
+  const [recentDraws, setRecentDraws] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const fetchRecentDraws = async () => {
-      try {
-        const { data } = await supabase
-          .from('draws')
-          .select('*')
-          .order('date', { ascending: false })
-          .limit(6);
-        
-        if (data) {
-          setRecentDraws(data);
-        }
-      } catch (err) {
-        console.error('Error fetching draws:', err);
-      } finally {
-        setLoading(false);
-      }
+    const fetchDraws = async () => {
+      const { data, error } = await supabase
+        .from('draws')
+        .select('*')
+        .order('date', { ascending: false })
+        .limit(3);
+      
+      if (data) setRecentDraws(data);
+      setLoading(false);
     };
 
-    fetchRecentDraws();
+    fetchDraws();
 
     // Real-time listener for new draws
     const channel = supabase
-      .channel('draws-latest')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'draws' }, (payload) => {
-        fetchRecentDraws();
+      .channel('draws_updates')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'draws' }, (payload) => {
+        setRecentDraws(prev => [payload.new, ...prev].slice(0, 3));
       })
       .subscribe();
 
@@ -55,166 +45,190 @@ export default function Home() {
     };
   }, []);
 
-  const getDateLocale = () => {
-    return i18n.language === 'fr' ? fr : enUS;
-  };
+  const features = [
+    { icon: ShieldCheck, title: t('secure_payments'), desc: "Transactions cryptées et sécurisées via Supabase." },
+    { icon: Zap, title: t('realtime_updates'), desc: "Résultats et tirages mis à jour instantanément." },
+    { icon: Smartphone, title: t('mobile_friendly'), desc: "Jouez n'importe où, n'importe quand sur votre mobile." },
+    { icon: TrendingUp, title: "Jackpots Énormes", desc: "Des gains records chaque semaine pour nos joueurs." },
+  ];
 
   return (
-    <div className="space-y-16">
+    <div className="space-y-20 pb-20">
       {/* Hero Section */}
-      <section className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-primary to-primary-dark text-white p-8 md:p-16 shadow-2xl border-b-8 border-secondary">
-        <div className="relative z-10 max-w-2xl">
-          <motion.h1 
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="text-5xl md:text-7xl font-black tracking-tighter mb-6 leading-none italic uppercase"
-          >
-            JOUEZ. <br /> <span className="text-secondary">GAGNEZ.</span> <br /> CHANGEZ VOTRE VIE.
-          </motion.h1>
-          <p className="text-xl text-white/80 mb-8 max-w-lg">
-            La loterie la plus fiable d'Haïti est maintenant en ligne. Achetez vos billets avec MonCash, NatCash ou Lajan Cash en quelques clics.
-          </p>
-          <div className="flex flex-wrap gap-4">
-            <Link 
-              to="/buy" 
-              className="bg-secondary text-primary px-8 py-4 rounded-full font-black text-lg hover:bg-white transition-all flex items-center gap-2 shadow-lg hover:scale-105 uppercase tracking-wider"
-            >
-              {t('buy_ticket') || 'Buy Ticket'}
-              <ArrowRight size={20} />
-            </Link>
-            <Link 
-              to="/results" 
-              className="bg-primary-dark/40 backdrop-blur-sm border border-white/20 text-white px-8 py-4 rounded-full font-bold text-lg hover:bg-primary-dark/60 transition-all uppercase tracking-wider"
-            >
-              {t('results') || 'Results'}
-            </Link>
-          </div>
+      <section className="relative h-[80vh] flex items-center justify-center overflow-hidden bg-primary dark:bg-black">
+        <div className="absolute inset-0 opacity-20">
+          <div className="absolute top-0 -left-10 w-72 h-72 bg-secondary rounded-full blur-3xl animate-pulse"></div>
+          <div className="absolute bottom-0 -right-10 w-96 h-96 bg-accent rounded-full blur-3xl animate-pulse delay-700"></div>
         </div>
         
-        <div className="absolute top-0 right-0 -mr-20 -mt-20 w-96 h-96 bg-secondary rounded-full mix-blend-overlay filter blur-3xl opacity-10 animate-pulse"></div>
-        <div className="absolute bottom-0 right-0 -mr-20 -mb-20 w-80 h-80 bg-accent rounded-full mix-blend-overlay filter blur-3xl opacity-10 animate-pulse delay-700"></div>
+        <div className="relative z-10 max-w-7xl mx-auto px-4 text-center">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.8 }}
+          >
+            <span className="inline-block px-4 py-1 rounded-full bg-secondary/20 text-secondary font-black text-xs uppercase tracking-widest mb-6 border border-secondary/20">
+              #1 Loterie en Haïti
+            </span>
+            <h1 className="text-5xl md:text-7xl font-black text-white mb-6 tracking-tighter leading-none italic uppercase">
+              {t('hero_title').split(',').map((part, i) => (
+                <span key={i} className={i === 1 ? "text-secondary block" : "block"}>{part}</span>
+              ))}
+            </h1>
+            <p className="text-lg md:text-xl text-slate-300 mb-10 max-w-2xl mx-auto font-medium">
+              {t('hero_subtitle')}
+            </p>
+            <div className="flex flex-col sm:flex-row gap-4 justify-center">
+              <Link to="/buy-ticket" className="btn-secondary text-lg px-10 py-4 flex items-center justify-center gap-2">
+                <Ticket size={24} /> {t('buy_ticket')}
+              </Link>
+              <Link to="/results" className="bg-white/10 backdrop-blur-md text-white border border-white/20 px-10 py-4 rounded-xl font-bold hover:bg-white/20 transition-all flex items-center justify-center gap-2">
+                <History size={24} /> {t('results')}
+              </Link>
+            </div>
+          </motion.div>
+        </div>
+
+        {/* Floating Balls Animation */}
+        <div className="absolute inset-0 pointer-events-none">
+          {[12, 45, 88, 23, 67].map((num, i) => (
+            <motion.div
+              key={i}
+              initial={{ opacity: 0, scale: 0 }}
+              animate={{ opacity: 0.4, scale: 1 }}
+              transition={{ delay: i * 0.2, duration: 1 }}
+              className={`absolute w-12 h-12 md:w-20 md:h-20 bg-white/10 rounded-full flex items-center justify-center text-white font-black text-xl md:text-3xl border border-white/20 backdrop-blur-sm animate-float`}
+              style={{
+                top: `${20 + i * 15}%`,
+                left: `${10 + i * 20}%`,
+                animationDelay: `${i * 0.5}s`
+              }}
+            >
+              {num}
+            </motion.div>
+          ))}
+        </div>
       </section>
 
-      {/* Recent Results */}
-      <section>
-        <div className="flex justify-between items-end mb-8">
+      {/* Recent Draws Section */}
+      <section className="max-w-7xl mx-auto px-4">
+        <div className="flex items-end justify-between mb-12">
           <div>
-            <h2 className="text-3xl font-black text-gray-900 tracking-tight">{t('recent_results') || 'Recent Results'}</h2>
-            <p className="text-gray-500">Derniers tirages officiels (Mise à jour en temps réel)</p>
+            <h2 className="text-3xl md:text-4xl font-black text-primary dark:text-secondary uppercase italic tracking-tighter mb-2">
+              {t('recent_draws')}
+            </h2>
+            <p className="text-slate-500 dark:text-slate-400 font-medium">Consultez les derniers numéros gagnants en temps réel.</p>
           </div>
-          <Link to="/results" className="text-primary font-black flex items-center gap-1 hover:underline uppercase text-sm tracking-wider">
+          <Link to="/results" className="hidden md:flex items-center gap-2 text-primary font-black uppercase tracking-widest text-xs hover:gap-4 transition-all dark:text-secondary">
             Voir tout <ArrowRight size={16} />
           </Link>
         </div>
 
-        {loading ? (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {[1, 2, 3].map(i => (
-              <div key={i} className="h-48 bg-gray-200 animate-pulse rounded-2xl"></div>
-            ))}
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {recentDraws.map((draw) => (
-              <motion.div 
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+          {loading ? (
+            [1, 2, 3].map(i => (
+              <div key={i} className="card animate-pulse h-64"></div>
+            ))
+          ) : recentDraws.length > 0 ? (
+            recentDraws.map((draw, i) => (
+              <motion.div
                 key={draw.id}
-                whileHover={{ y: -5 }}
-                className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 hover:shadow-md transition-all"
+                initial={{ opacity: 0, y: 20 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ delay: i * 0.1 }}
+                className="card group hover:border-primary/20 transition-all dark:hover:border-secondary/20"
               >
-                <div className="flex justify-between items-start mb-4">
-                  <span className="bg-secondary/20 text-primary-dark px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border border-secondary/30">
+                <div className="flex justify-between items-start mb-6">
+                  <div className="px-3 py-1 bg-primary/5 text-primary rounded-lg text-[10px] font-black uppercase tracking-widest dark:bg-secondary/5 dark:text-secondary">
                     {draw.type}
-                  </span>
-                  <span className="text-gray-400 text-[10px] font-bold uppercase tracking-widest">
-                    {draw.date ? format(parseISO(draw.date), 'PPP', { locale: getDateLocale() }) : ''}
-                  </span>
+                  </div>
+                  <div className="text-xs font-bold text-slate-400">
+                    {format(new Date(draw.date), 'PPP', { locale: fr })}
+                  </div>
                 </div>
-                <div className="flex gap-2 mb-6">
-                  {draw.numbers.map((num, idx) => (
-                    <div 
-                      key={idx} 
-                      className="w-10 h-10 rounded-full bg-primary text-white flex items-center justify-center font-black text-lg shadow-lg border-2 border-secondary/20"
-                    >
+                
+                <div className="flex gap-3 justify-center mb-8">
+                  {draw.numbers.map((num: string, idx: number) => (
+                    <div key={idx} className="w-12 h-12 rounded-full bg-slate-900 text-white flex items-center justify-center font-black text-xl shadow-lg shadow-slate-900/20 group-hover:bg-primary transition-colors dark:bg-slate-800 dark:group-hover:bg-secondary dark:group-hover:text-primary">
                       {num}
                     </div>
                   ))}
                 </div>
-                <div className="pt-4 border-t border-gray-50 flex justify-between items-center">
-                  <div className="text-[10px] text-gray-400 uppercase tracking-widest font-black">Jackpot</div>
-                  <div className="text-xl font-black text-accent">
-                    {draw.jackpot.toLocaleString()} HTG
+
+                <div className="flex justify-between items-center pt-6 border-t border-slate-100 dark:border-dark-border">
+                  <div>
+                    <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Jackpot</div>
+                    <div className="text-xl font-black text-accent">{draw.jackpot?.toLocaleString()} HTG</div>
+                  </div>
+                  <div className="flex items-center gap-1 text-green-500 font-bold text-xs uppercase">
+                    <Star size={14} fill="currentColor" /> {draw.status}
                   </div>
                 </div>
               </motion.div>
+            ))
+          ) : (
+            <div className="col-span-full text-center py-20 text-slate-400 font-bold italic">
+              Aucun tirage récent disponible.
+            </div>
+          )}
+        </div>
+      </section>
+
+      {/* Features Section */}
+      <section className="bg-slate-100 py-24 dark:bg-dark-surface/30">
+        <div className="max-w-7xl mx-auto px-4">
+          <div className="text-center mb-16">
+            <h2 className="text-3xl md:text-4xl font-black text-primary dark:text-secondary uppercase italic tracking-tighter mb-4">
+              Pourquoi nous choisir ?
+            </h2>
+            <p className="text-slate-500 dark:text-slate-400 max-w-2xl mx-auto font-medium">
+              Nous offrons la meilleure expérience de loterie en Haïti avec une sécurité inégalée et des gains rapides.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
+            {features.map((f, i) => (
+              <motion.div
+                key={i}
+                initial={{ opacity: 0, scale: 0.9 }}
+                whileInView={{ opacity: 1, scale: 1 }}
+                viewport={{ once: true }}
+                transition={{ delay: i * 0.1 }}
+                className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100 text-center hover:shadow-xl transition-all dark:bg-dark-surface dark:border-dark-border"
+              >
+                <div className="w-16 h-16 bg-primary/5 text-primary rounded-2xl flex items-center justify-center mx-auto mb-6 dark:bg-secondary/5 dark:text-secondary">
+                  <f.icon size={32} />
+                </div>
+                <h3 className="text-lg font-black text-slate-900 mb-2 dark:text-white uppercase italic">{f.title}</h3>
+                <p className="text-sm text-slate-500 dark:text-slate-400 leading-relaxed">{f.desc}</p>
+              </motion.div>
             ))}
           </div>
-        )}
-      </section>
-
-      {/* Features / Why Us */}
-      <section className="grid grid-cols-1 md:grid-cols-3 gap-8 py-12">
-        <div className="flex flex-col items-center text-center p-6">
-          <div className="w-16 h-16 bg-primary/10 text-primary rounded-2xl flex items-center justify-center mb-6 border border-primary/20">
-            <ShieldCheck size={32} />
-          </div>
-          <h3 className="text-xl font-black uppercase tracking-tight mb-2">100% Sécurisé</h3>
-          <p className="text-gray-500 text-sm">Transactions cryptées et résultats certifiés par les autorités compétentes.</p>
-        </div>
-        <div className="flex flex-col items-center text-center p-6">
-          <div className="w-16 h-16 bg-secondary/20 text-primary-dark rounded-2xl flex items-center justify-center mb-6 border border-secondary/30">
-            <Zap size={32} />
-          </div>
-          <h3 className="text-xl font-black uppercase tracking-tight mb-2">Paiements Instantanés</h3>
-          <p className="text-gray-500 text-sm">Recevez vos gains directement sur MonCash, NatCash ou Lajan Cash en quelques minutes.</p>
-        </div>
-        <div className="flex flex-col items-center text-center p-6">
-          <div className="w-16 h-16 bg-accent/10 text-accent rounded-2xl flex items-center justify-center mb-6 border border-accent/20">
-            <Star size={32} />
-          </div>
-          <h3 className="text-xl font-black uppercase tracking-tight mb-2">Programme Fidélité</h3>
-          <p className="text-gray-500 text-sm">Cumulez des points à chaque achat et échangez-les contre des billets gratuits.</p>
         </div>
       </section>
 
-      {/* Become an Agent Section */}
-      <section className="bg-primary/5 rounded-3xl p-8 md:p-12 border border-primary/10 flex flex-col md:flex-row items-center justify-between gap-8">
-        <div className="max-w-xl">
-          <div className="inline-flex items-center gap-2 bg-secondary text-primary px-4 py-1 rounded-full text-[10px] font-black uppercase tracking-widest mb-4 shadow-sm">
-            <Zap size={14} /> Opportunité
-          </div>
-          <h2 className="text-3xl font-black text-gray-900 mb-4 tracking-tight uppercase italic">
-            <Logo className="inline-block mr-2" />
-            <span className="text-primary">Become</span> <span className="text-accent">an Agent</span>
+      {/* CTA Section */}
+      <section className="max-w-7xl mx-auto px-4">
+        <div className="bg-primary rounded-[3rem] p-12 md:p-20 text-center relative overflow-hidden dark:bg-black border border-white/5">
+          <div className="absolute top-0 right-0 w-64 h-64 bg-secondary/10 rounded-full blur-3xl -mr-32 -mt-32"></div>
+          <div className="absolute bottom-0 left-0 w-64 h-64 bg-accent/10 rounded-full blur-3xl -ml-32 -mb-32"></div>
+          
+          <h2 className="text-4xl md:text-6xl font-black text-white mb-8 tracking-tighter uppercase italic leading-none">
+            Prêt à devenir le prochain <span className="text-secondary">millionnaire ?</span>
           </h2>
-          <p className="text-gray-600 mb-6">
-            {t('become_agent_desc') || 'Become an agent'} Profitez de notre technologie avancée et de notre support dédié pour développer votre propre entreprise de loterie.
+          <p className="text-slate-300 mb-12 max-w-xl mx-auto font-medium">
+            Rejoignez des milliers de joueurs satisfaits et tentez votre chance aujourd'hui. L'inscription est rapide et gratuite.
           </p>
-          <Link 
-            to="/contact" 
-            className="inline-flex items-center gap-2 text-primary font-black uppercase text-sm tracking-widest hover:gap-3 transition-all"
-          >
-            {t('join_network') || 'Join Network'} <ArrowRight size={18} />
-          </Link>
-        </div>
-        <div className="hidden md:block">
-          <div className="w-48 h-48 bg-white rounded-3xl shadow-xl border border-secondary/20 flex items-center justify-center -rotate-6">
-            <Monitor size={64} className="text-primary" />
+          <div className="flex flex-col sm:flex-row gap-4 justify-center">
+            <Link to="/profile" className="btn-secondary px-12 py-4 text-lg">
+              Créer un compte
+            </Link>
+            <Link to="/rules" className="bg-white/10 text-white border border-white/20 px-12 py-4 rounded-xl font-bold hover:bg-white/20 transition-all">
+              Comment jouer ?
+            </Link>
           </div>
         </div>
-      </section>
-
-      {/* Call to Action */}
-      <section className="bg-primary text-white rounded-3xl p-12 text-center border-t-8 border-secondary shadow-2xl">
-        <h2 className="text-4xl font-black mb-6 tracking-tight uppercase italic">Prêt à tenter votre chance ?</h2>
-        <p className="text-white/60 mb-8 max-w-xl mx-auto">
-          Rejoignez des milliers de joueurs haïtiens et commencez à jouer dès aujourd'hui sur la plateforme la plus moderne du pays.
-        </p>
-        <Link 
-          to="/profile" 
-          className="inline-block bg-secondary text-primary px-10 py-4 rounded-full font-black text-lg hover:bg-white transition-all shadow-xl uppercase tracking-widest"
-        >
-          Créer un compte gratuit
-        </Link>
       </section>
     </div>
   );

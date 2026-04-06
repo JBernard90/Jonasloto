@@ -1,146 +1,182 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { motion } from 'motion/react';
-import { Mail, Phone, MapPin, MessageSquare, Send, Globe, Facebook, Instagram, Twitter } from 'lucide-react';
+import { 
+  Mail, Phone, MapPin, Send, 
+  CheckCircle2, AlertCircle, Globe,
+  MessageSquare, HelpCircle, ArrowRight
+} from 'lucide-react';
+import Logo from '../components/Logo';
 
 export default function Contact() {
   const { t } = useTranslation();
+  const [loading, setLoading] = useState(false);
+  const [success, setSuccess] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const contactMethods = [
-    {
-      icon: Phone,
-      title: "Téléphone",
-      value: "+509 2812-3456",
-      desc: "Disponible du lundi au samedi, 8h - 18h",
-      color: "text-blue-600",
-      bg: "bg-blue-50"
-    },
-    {
-      icon: Mail,
-      title: "Email",
-      value: "contact@jonasloto.com",
-      desc: "Nous répondons sous 24 heures",
-      color: "text-primary",
-      bg: "bg-primary/5"
-    },
-    {
-      icon: MessageSquare,
-      title: "WhatsApp",
-      value: "+509 3712-3456",
-      desc: "Support rapide par message",
-      color: "text-green-600",
-      bg: "bg-green-50"
-    }
-  ];
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setError(null);
+
+    // Simulate sending message
+    setTimeout(() => {
+      setLoading(false);
+      setSuccess(true);
+    }, 1500);
+  };
 
   return (
-    <div className="max-w-5xl mx-auto space-y-12">
-      <section className="text-center space-y-4">
-        <h1 className="text-4xl md:text-5xl font-black text-gray-900 tracking-tight">Contactez-nous</h1>
-        <p className="text-gray-500 max-w-2xl mx-auto">
-          Une question sur un tirage, un problème avec votre compte ou vous souhaitez devenir agent ? Notre équipe est là pour vous aider.
-        </p>
-      </section>
-
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {contactMethods.map((method, idx) => (
-          <motion.div 
-            key={idx}
-            whileHover={{ y: -5 }}
-            className="bg-white p-8 rounded-3xl shadow-sm border border-gray-100 text-center"
-          >
-            <div className={`w-16 h-16 ${method.bg} ${method.color} rounded-2xl flex items-center justify-center mx-auto mb-6`}>
-              <method.icon size={32} />
-            </div>
-            <h3 className="text-lg font-bold text-gray-900 mb-2">{method.title}</h3>
-            <p className="text-primary font-black mb-2">{method.value}</p>
-            <p className="text-gray-400 text-xs">{method.desc}</p>
-          </motion.div>
-        ))}
+    <div className="max-w-7xl mx-auto px-4 py-12 space-y-12">
+      <div className="text-center mb-12">
+        <h1 className="text-4xl md:text-5xl font-black text-primary dark:text-secondary uppercase italic tracking-tighter mb-2">
+          {t('contact')}
+        </h1>
+        <p className="text-slate-500 dark:text-slate-400 font-medium">Une question ? Une suggestion ? Nous sommes à votre écoute.</p>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        <div className="bg-white p-8 md:p-10 rounded-3xl shadow-sm border border-gray-100">
-          <h2 className="text-2xl font-black text-gray-900 mb-6 tracking-tight">Envoyez-nous un message</h2>
-          <form className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1">
-                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-1">Nom</label>
-                <input type="text" className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-primary focus:outline-none font-medium" />
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
+        <motion.div
+          initial={{ opacity: 0, x: -20 }}
+          animate={{ opacity: 1, x: 0 }}
+          className="space-y-8"
+        >
+          <div className="card p-8 md:p-10 space-y-8">
+            <h2 className="text-2xl font-black text-slate-900 dark:text-white uppercase italic tracking-tighter mb-6 flex items-center gap-2">
+              <MessageSquare className="text-primary dark:text-secondary" /> Envoyez-nous un message
+            </h2>
+
+            {success ? (
+              <div className="text-center py-12 space-y-6">
+                <div className="w-20 h-20 bg-green-50 text-green-500 rounded-full flex items-center justify-center mx-auto dark:bg-green-500/10">
+                  <CheckCircle2 size={48} />
+                </div>
+                <div>
+                  <h3 className="text-2xl font-black text-slate-900 dark:text-white uppercase italic tracking-tighter mb-2">Message Envoyé !</h3>
+                  <p className="text-slate-500 dark:text-slate-400 font-medium">Merci pour votre message. Notre équipe vous répondra dans les plus brefs délais.</p>
+                </div>
+                <button onClick={() => setSuccess(false)} className="btn-primary px-8">
+                  Envoyer un autre message
+                </button>
               </div>
-              <div className="space-y-1">
-                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-1">Email</label>
-                <input type="email" className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-primary focus:outline-none font-medium" />
+            ) : (
+              <form onSubmit={handleSubmit} className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Nom Complet</label>
+                    <input type="text" required className="input-field" placeholder="Votre nom..." />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">E-mail</label>
+                    <input type="email" required className="input-field" placeholder="votre@email.com" />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Sujet</label>
+                  <input type="text" required className="input-field" placeholder="Sujet de votre message..." />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Message</label>
+                  <textarea required rows={5} className="input-field resize-none" placeholder="Comment pouvons-nous vous aider ?"></textarea>
+                </div>
+
+                {error && (
+                  <div className="p-4 bg-accent/5 border border-accent/10 rounded-xl flex items-center gap-3 text-accent text-xs font-bold">
+                    <AlertCircle size={18} /> {error}
+                  </div>
+                )}
+
+                <button 
+                  type="submit" 
+                  disabled={loading}
+                  className="w-full btn-primary py-4 text-lg flex items-center justify-center gap-2"
+                >
+                  {loading ? (
+                    <div className="w-6 h-6 border-4 border-white border-t-transparent rounded-full animate-spin"></div>
+                  ) : (
+                    <>
+                      <Send size={20} /> Envoyer le message
+                    </>
+                  )}
+                </button>
+              </form>
+            )}
+          </div>
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0, x: 20 }}
+          animate={{ opacity: 1, x: 0 }}
+          className="space-y-8"
+        >
+          <div className="card bg-primary text-white dark:bg-black border-none p-10 space-y-10">
+            <div className="space-y-2">
+              <h2 className="text-3xl font-black uppercase italic tracking-tighter mb-2">Informations de Contact</h2>
+              <p className="text-slate-400 font-medium">Retrouvez-nous ou contactez-nous directement via ces canaux.</p>
+            </div>
+
+            <div className="space-y-8">
+              <div className="flex items-start gap-6">
+                <div className="w-12 h-12 bg-white/10 rounded-2xl flex items-center justify-center text-secondary shrink-0">
+                  <MapPin size={24} />
+                </div>
+                <div>
+                  <h4 className="text-sm font-black uppercase tracking-widest text-secondary mb-1">Notre Siège</h4>
+                  <p className="text-slate-300 font-medium">123 Rue des Miracles, Port-au-Prince, Haïti</p>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-6">
+                <div className="w-12 h-12 bg-white/10 rounded-2xl flex items-center justify-center text-secondary shrink-0">
+                  <Phone size={24} />
+                </div>
+                <div>
+                  <h4 className="text-sm font-black uppercase tracking-widest text-secondary mb-1">Téléphone</h4>
+                  <p className="text-slate-300 font-medium">+509 1234 5678</p>
+                  <p className="text-slate-300 font-medium">+509 8765 4321</p>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-6">
+                <div className="w-12 h-12 bg-white/10 rounded-2xl flex items-center justify-center text-secondary shrink-0">
+                  <Mail size={24} />
+                </div>
+                <div>
+                  <h4 className="text-sm font-black uppercase tracking-widest text-secondary mb-1">E-mail</h4>
+                  <p className="text-slate-300 font-medium">contact@jonaslotocenter.com</p>
+                  <p className="text-slate-300 font-medium">support@jonaslotocenter.com</p>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-6">
+                <div className="w-12 h-12 bg-white/10 rounded-2xl flex items-center justify-center text-secondary shrink-0">
+                  <Globe size={24} />
+                </div>
+                <div>
+                  <h4 className="text-sm font-black uppercase tracking-widest text-secondary mb-1">Réseaux Sociaux</h4>
+                  <div className="flex gap-4 mt-2">
+                    <a href="#" className="text-slate-300 hover:text-secondary transition-colors">Facebook</a>
+                    <a href="#" className="text-slate-300 hover:text-secondary transition-colors">Instagram</a>
+                    <a href="#" className="text-slate-300 hover:text-secondary transition-colors">Twitter</a>
+                  </div>
+                </div>
               </div>
             </div>
-            <div className="space-y-1">
-              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-1">Sujet</label>
-              <select className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-primary focus:outline-none font-medium appearance-none">
-                <option>Support Technique</option>
-                <option>Question sur les paiements</option>
-                <option>Devenir Agent / Partenaire</option>
-                <option>Autre</option>
-              </select>
+          </div>
+
+          <div className="card p-8 bg-slate-50 dark:bg-dark-surface border-slate-100 dark:border-dark-border">
+            <div className="flex items-center gap-4 mb-6">
+              <div className="w-12 h-12 bg-primary/5 text-primary rounded-2xl flex items-center justify-center dark:bg-secondary/5 dark:text-secondary">
+                <HelpCircle size={24} />
+              </div>
+              <h3 className="text-xl font-black text-slate-900 dark:text-white uppercase italic tracking-tighter">Besoin d'aide ?</h3>
             </div>
-            <div className="space-y-1">
-              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-1">Message</label>
-              <textarea rows={4} className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-primary focus:outline-none font-medium resize-none"></textarea>
-            </div>
-            <button className="w-full bg-primary text-white py-4 rounded-xl font-bold hover:bg-primary-dark transition-colors shadow-lg shadow-primary/20 flex items-center justify-center gap-2">
-              <Send size={18} /> Envoyer le message
+            <p className="text-slate-500 dark:text-slate-400 font-medium mb-6">Consultez nos règles du jeu et notre foire aux questions pour des réponses rapides.</p>
+            <button className="text-primary dark:text-secondary font-black uppercase tracking-widest text-xs flex items-center gap-2 hover:gap-3 transition-all">
+              Voir les règles <ArrowRight size={16} />
             </button>
-          </form>
-        </div>
-
-        <div className="space-y-8">
-          <div className="bg-gray-900 text-white p-10 rounded-3xl relative overflow-hidden">
-            <div className="relative z-10">
-              <h2 className="text-2xl font-black mb-6 tracking-tight">Siège Social</h2>
-              <div className="space-y-6">
-                <div className="flex items-start gap-4">
-                  <div className="w-10 h-10 bg-gray-800 rounded-xl flex items-center justify-center text-accent shrink-0">
-                    <MapPin size={20} />
-                  </div>
-                  <div>
-                    <p className="font-bold">Port-au-Prince, Haïti</p>
-                    <p className="text-sm text-gray-400">123, Avenue Jean-Paul II, Turgeau</p>
-                  </div>
-                </div>
-                <div className="flex items-start gap-4">
-                  <div className="w-10 h-10 bg-gray-800 rounded-xl flex items-center justify-center text-accent shrink-0">
-                    <Globe size={20} />
-                  </div>
-                  <div>
-                    <p className="font-bold">Présence Nationale</p>
-                    <p className="text-sm text-gray-400">Plus de 500 agents à travers les 10 départements d'Haïti.</p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="mt-12">
-                <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-4">Suivez-nous</p>
-                <div className="flex gap-4">
-                  <a href="#" className="w-12 h-12 bg-gray-800 rounded-xl flex items-center justify-center hover:bg-primary transition-colors">
-                    <Facebook size={20} />
-                  </a>
-                  <a href="#" className="w-12 h-12 bg-gray-800 rounded-xl flex items-center justify-center hover:bg-primary transition-colors">
-                    <Instagram size={20} />
-                  </a>
-                  <a href="#" className="w-12 h-12 bg-gray-800 rounded-xl flex items-center justify-center hover:bg-primary transition-colors">
-                    <Twitter size={20} />
-                  </a>
-                </div>
-              </div>
-            </div>
-            <div className="absolute top-0 right-0 -mr-20 -mt-20 w-64 h-64 bg-primary rounded-full mix-blend-multiply filter blur-3xl opacity-10"></div>
           </div>
-
-          <div className="bg-primary/5 p-8 rounded-3xl border border-primary/10">
-            <h3 className="text-lg font-bold text-gray-900 mb-2">Besoin d'aide immédiate ?</h3>
-            <p className="text-gray-600 text-sm mb-4">Consultez notre foire aux questions pour des réponses rapides aux questions courantes.</p>
-            <button className="text-primary font-bold text-sm hover:underline">Voir la FAQ &rarr;</button>
-          </div>
-        </div>
+        </motion.div>
       </div>
     </div>
   );
