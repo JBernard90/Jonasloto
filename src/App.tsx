@@ -16,6 +16,7 @@ const POS = lazy(() => import('./pages/POS'));
 const Supervisor = lazy(() => import('./pages/Supervisor'));
 const Contact = lazy(() => import('./pages/Contact'));
 const Rules = lazy(() => import('./pages/Rules'));
+const Terms = lazy(() => import('./pages/Terms'));
 
 import Layout from './components/Layout';
 import ErrorBoundary from './components/ErrorBoundary';
@@ -308,6 +309,7 @@ export default function App() {
               <Route path="/otp" element={<OTP />} />
               <Route path="/contact" element={<Contact />} />
               <Route path="/rules" element={<Rules />} />
+              <Route path="/terms" element={<Terms />} />
               
               {/* Protected Routes */}
               <Route 

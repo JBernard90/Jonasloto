@@ -273,6 +273,7 @@ export default function Layout({ children, user: initialUser, role: initialRole 
                 {navLinks.map(link => (
                   <li key={link.path}><Link to={link.path} className="hover:text-secondary transition-colors">{link.name}</Link></li>
                 ))}
+                <li><Link to="/terms" className="hover:text-secondary transition-colors">Conditions d'Utilisation</Link></li>
               </ul>
             </div>
 

@@ -40,6 +40,7 @@ export default function Profile({ user: initialUser }: { user?: any }) {
   const [idNumber, setIdNumber] = useState('');
   const [idPhotoFront, setIdPhotoFront] = useState<File | null>(null);
   const [idPhotoBack, setIdPhotoBack] = useState<File | null>(null);
+  const [termsAccepted, setTermsAccepted] = useState(false);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -146,6 +147,43 @@ export default function Profile({ user: initialUser }: { user?: any }) {
     e.preventDefault();
     setLoading(true);
     setError(null);
+    
+    // Explicit validation to fix "missing email or phone"
+    if (authMode === 'signup') {
+      if (!fullName.trim()) {
+        setError("Le nom complet est requis.");
+        setLoading(false);
+        return;
+      }
+      if (!phone.trim()) {
+        setError("Le numéro de téléphone est requis.");
+        setLoading(false);
+        return;
+      }
+      if (!dob) {
+        setError("La date de naissance est requise.");
+        setLoading(false);
+        return;
+      }
+      if (!termsAccepted) {
+        setError("Vous devez accepter les conditions d'utilisation.");
+        setLoading(false);
+        return;
+      }
+    }
+
+    if (!user) {
+      if (!email.trim()) {
+        setError("L'adresse e-mail est requise.");
+        setLoading(false);
+        return;
+      }
+      if (!password.trim()) {
+        setError("Le mot de passe est requis.");
+        setLoading(false);
+        return;
+      }
+    }
 
     try {
       if (authMode === 'signup') {
@@ -172,6 +210,10 @@ export default function Profile({ user: initialUser }: { user?: any }) {
 
         let currentUserId = user?.id;
         let currentEmail = user?.email || email;
+
+        if (!currentEmail || !currentEmail.trim()) {
+          throw new Error("L'adresse e-mail est manquante.");
+        }
 
         if (!user) {
           const { data: authData, error: authError } = await supabase.auth.signUp({
@@ -418,6 +460,12 @@ export default function Profile({ user: initialUser }: { user?: any }) {
                     <div className="flex items-center gap-3"><Smartphone size={18} /> Notifications</div>
                     <ChevronRight size={16} />
                   </button>
+                </li>
+                <li>
+                  <Link to="/terms" className="w-full flex items-center justify-between text-sm font-bold text-slate-600 hover:text-primary transition-all dark:text-slate-400 dark:hover:text-secondary">
+                    <div className="flex items-center gap-3"><ShieldCheck size={18} /> Conditions d'Utilisation</div>
+                    <ChevronRight size={16} />
+                  </Link>
                 </li>
               </ul>
             </div>
@@ -676,6 +724,22 @@ export default function Profile({ user: initialUser }: { user?: any }) {
                   )}
                 </div>
               </>
+            )}
+
+            {authMode === 'signup' && (
+              <div className="flex items-start gap-3 p-4 bg-slate-50 rounded-2xl border border-slate-100 dark:bg-dark-bg dark:border-dark-border">
+                <input 
+                  type="checkbox" 
+                  id="terms"
+                  checked={termsAccepted}
+                  onChange={(e) => setTermsAccepted(e.target.checked)}
+                  className="mt-1 w-4 h-4 text-primary rounded border-slate-300 focus:ring-primary dark:bg-dark-surface dark:border-dark-border"
+                  required
+                />
+                <label htmlFor="terms" className="text-xs text-slate-500 leading-relaxed">
+                  J'ai lu et j'accepte les <Link to="/terms" className="text-primary dark:text-secondary font-bold hover:underline">Conditions d'Utilisation</Link> de Jonas Loto Center, incluant les règles de jeu et de retrait en Haïti.
+                </label>
+              </div>
             )}
 
             {!user && (
