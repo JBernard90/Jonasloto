@@ -10,7 +10,7 @@ interface TicketCardProps {
     entries: any;
     amount: number;
     status: string;
-    created_at: string;
+    createdAt: string;
   };
 }
 
@@ -19,7 +19,7 @@ export default function TicketCard({ ticket }: TicketCardProps) {
     id: ticket.id,
     borlette: ticket.borlette,
     amount: ticket.amount,
-    date: ticket.created_at
+    date: ticket.createdAt
   });
 
   return (

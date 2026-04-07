@@ -95,6 +95,7 @@ CREATE POLICY "Admins can manage draws" ON public.draws
 CREATE TABLE IF NOT EXISTS public.tickets (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
     "userId" UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+    "agentId" UUID REFERENCES auth.users(id) ON DELETE SET NULL,
     borlette TEXT NOT NULL,
     lotos JSONB NOT NULL,
     entries JSONB NOT NULL,
@@ -125,6 +126,7 @@ CREATE POLICY "Admins can view all tickets" ON public.tickets
 CREATE TABLE IF NOT EXISTS public.transactions (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
     "userId" UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+    "agentId" UUID REFERENCES auth.users(id) ON DELETE SET NULL,
     amount NUMERIC NOT NULL,
     type TEXT NOT NULL CHECK (type IN ('deposit', 'withdrawal', 'purchase', 'win')),
     status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'completed', 'failed')),

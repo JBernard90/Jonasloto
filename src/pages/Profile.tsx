@@ -66,13 +66,13 @@ export default function Profile({ user: initialUser }: { user?: any }) {
 
   const fetchUserData = async (uid: string) => {
     try {
-      const { data, error } = await supabase.from('users').select('*').eq('uid', uid).single();
+      const { data, error } = await supabase.from('users').select('*').eq('uid', uid).maybeSingle();
+      
       if (error) throw error;
+
       if (data) {
         setUserData(data);
       } else {
-        // If no user data found, it means it's a new signup (e.g. Google)
-        // We need to show the "Complete Profile" form
         setAuthMode('signup');
       }
     } catch (err) {
@@ -86,7 +86,7 @@ export default function Profile({ user: initialUser }: { user?: any }) {
         .from('tickets')
         .select('*')
         .eq('userId', uid)
-        .order('created_at', { ascending: false });
+        .order('createdAt', { ascending: false });
       if (error) throw error;
       if (data) setTickets(data);
     } catch (err) {
@@ -100,7 +100,7 @@ export default function Profile({ user: initialUser }: { user?: any }) {
         .from('transactions')
         .select('*')
         .eq('userId', uid)
-        .order('created_at', { ascending: false });
+        .order('createdAt', { ascending: false });
       if (error) throw error;
       if (data) setTransactions(data);
     } catch (err) {
@@ -187,7 +187,7 @@ export default function Profile({ user: initialUser }: { user?: any }) {
     }
 
     try {
-      if (authMode === 'signup') {
+      if (authMode === 'signup' || user) {
         // Age verification
         const birthDate = new Date(dob);
         const today = new Date();
@@ -509,7 +509,7 @@ export default function Profile({ user: initialUser }: { user?: any }) {
                         <div>
                           <div className="text-sm font-bold text-slate-900 dark:text-white">{tx.description || tx.type}</div>
                           <div className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">
-                            {format(parseISO(tx.created_at), 'dd MMMM yyyy • HH:mm', { locale: fr })}
+                            {format(parseISO(tx.createdAt), 'dd MMMM yyyy • HH:mm', { locale: fr })}
                           </div>
                         </div>
                       </div>

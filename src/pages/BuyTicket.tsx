@@ -50,7 +50,7 @@ export default function BuyTicket({ user: initialUser }: { user?: any }) {
 
   const fetchUserData = async (uid: string) => {
     try {
-      const { data, error } = await supabase.from('users').select('*').eq('uid', uid).single();
+      const { data, error } = await supabase.from('users').select('*').eq('uid', uid).maybeSingle();
       if (error) throw error;
       if (data) setUserData(data);
     } catch (err) {
@@ -438,7 +438,7 @@ export default function BuyTicket({ user: initialUser }: { user?: any }) {
                 
                 <div className="bg-white p-4 rounded-2xl shadow-sm inline-block">
                   <QRCodeSVG 
-                    value={JSON.stringify({ id: lastTicket.id, amount: lastTicket.amount, date: lastTicket.created_at })} 
+                    value={JSON.stringify({ id: lastTicket.id, amount: lastTicket.amount, date: lastTicket.createdAt })} 
                     size={160}
                   />
                 </div>

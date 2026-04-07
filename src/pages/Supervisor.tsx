@@ -56,7 +56,7 @@ export default function Supervisor() {
           .from('tickets')
           .select('*, agent:users!agentId(displayName, email)')
           .not('agentId', 'is', null)
-          .order('created_at', { ascending: false });
+          .order('createdAt', { ascending: false });
 
         if (ticketsError) throw ticketsError;
         if (ticketsList) setEarnings(ticketsList);
@@ -335,7 +335,7 @@ export default function Supervisor() {
                       </span>
                     </td>
                     <td className="px-6 py-4 text-xs text-slate-400">
-                      {format(new Date(ticket.created_at), 'dd/MM/yyyy HH:mm')}
+                      {format(new Date(ticket.createdAt), 'dd/MM/yyyy HH:mm')}
                     </td>
                   </tr>
                 ))}
