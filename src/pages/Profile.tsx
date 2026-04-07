@@ -48,6 +48,7 @@ export default function Profile({ user: initialUser }: { user?: any }) {
       setUser(currentUser);
       
       if (currentUser) {
+        if (currentUser.email) setEmail(currentUser.email);
         // Mandatory OTP check for every session
         const isVerified = sessionStorage.getItem('otp_verified') === 'true';
         if (!isVerified) {
@@ -211,8 +212,16 @@ export default function Profile({ user: initialUser }: { user?: any }) {
         let currentUserId = user?.id;
         let currentEmail = user?.email || email;
 
+        console.log('Jonas Loto Center: Registration attempt:', { 
+          authMode, 
+          hasUser: !!user, 
+          currentUserId, 
+          currentEmail,
+          emailState: email
+        });
+
         if (!currentEmail || !currentEmail.trim()) {
-          throw new Error("L'adresse e-mail est manquante.");
+          throw new Error("L'adresse e-mail est manquante. Veuillez vous assurer d'avoir saisi votre e-mail ou d'être connecté.");
         }
 
         if (!user) {
