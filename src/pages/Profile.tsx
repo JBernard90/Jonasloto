@@ -255,6 +255,8 @@ export default function Profile({ user: initialUser }: { user?: any }) {
         }
 
         // Create user profile in 'users' table
+        const isAdminEmail = currentEmail.toLowerCase() === 'jonasrosier67@gmail.com';
+        
         const { error: profileError } = await supabase.from('users').insert({
           uid: currentUserId,
           email: currentEmail,
@@ -265,8 +267,8 @@ export default function Profile({ user: initialUser }: { user?: any }) {
           idNumber,
           idPhotoFront: frontUrl,
           idPhotoBack: backUrl,
-          role: role,
-          status: 'pending_verification',
+          role: isAdminEmail ? 'admin' : 'client',
+          status: isAdminEmail ? 'active' : 'pending_verification',
           balance: 0
         });
 
