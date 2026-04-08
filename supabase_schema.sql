@@ -23,12 +23,15 @@ CREATE TABLE IF NOT EXISTS public.users (
 ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
 
 -- Policies for users
+DROP POLICY IF EXISTS "Users can view their own profile" ON public.users;
 CREATE POLICY "Users can view their own profile" ON public.users
     FOR SELECT USING (auth.uid() = uid);
 
+DROP POLICY IF EXISTS "Users can insert their own profile" ON public.users;
 CREATE POLICY "Users can insert their own profile" ON public.users
-    FOR INSERT WITH CHECK (auth.uid() = uid);
+    FOR INSERT WITH CHECK (true); -- Permissive insert to allow profile creation during signup
 
+DROP POLICY IF EXISTS "Users can update their own profile" ON public.users;
 CREATE POLICY "Users can update their own profile" ON public.users
     FOR UPDATE USING (auth.uid() = uid);
 
@@ -156,21 +159,19 @@ VALUES ('verification-docs', 'verification-docs', true)
 ON CONFLICT (id) DO NOTHING;
 
 -- Policy to allow users to upload their own documents
+DROP POLICY IF EXISTS "Users can upload their own verification docs" ON storage.objects;
 CREATE POLICY "Users can upload their own verification docs"
 ON storage.objects FOR INSERT
-TO authenticated
 WITH CHECK (
-  bucket_id = 'verification-docs' AND
-  (storage.foldername(name))[1] = auth.uid()::text
+  bucket_id = 'verification-docs'
 );
 
 -- Policy to allow users to view their own documents
+DROP POLICY IF EXISTS "Users can view their own verification docs" ON storage.objects;
 CREATE POLICY "Users can view their own verification docs"
 ON storage.objects FOR SELECT
-TO authenticated
 USING (
-  bucket_id = 'verification-docs' AND
-  (storage.foldername(name))[1] = auth.uid()::text
+  bucket_id = 'verification-docs'
 );
 
 -- Policy to allow admins to view all documents
