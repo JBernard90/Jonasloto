@@ -113,18 +113,27 @@ export default function Profile({ user: initialUser }: { user?: any }) {
     const fileName = `${Math.random()}.${fileExt}`;
     const filePath = `${path}/${fileName}`;
 
-    const { error: uploadError } = await supabase.storage
-      .from('verification-docs')
-      .upload(filePath, file)
-      .catch(err => ({ error: err }));
+    try {
+      const { error: uploadError } = await supabase.storage
+        .from('verification-docs')
+        .upload(filePath, file);
 
-    if (uploadError) throw uploadError;
+      if (uploadError) {
+        if (uploadError.message.includes('Bucket not found')) {
+          throw new Error("Le système de stockage n'est pas configuré. Veuillez contacter l'administrateur pour créer le bucket 'verification-docs'.");
+        }
+        throw uploadError;
+      }
 
-    const { data: { publicUrl } } = supabase.storage
-      .from('verification-docs')
-      .getPublicUrl(filePath);
+      const { data: { publicUrl } } = supabase.storage
+        .from('verification-docs')
+        .getPublicUrl(filePath);
 
-    return publicUrl;
+      return publicUrl;
+    } catch (err: any) {
+      console.error('Jonas Loto Center: uploadFile error:', err);
+      throw err;
+    }
   };
 
   const handleGoogleLogin = async () => {
